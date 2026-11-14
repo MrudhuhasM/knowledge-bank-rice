@@ -1,0 +1,6 @@
+{
+  "theme": "moonstone",
+  "cssTheme": "",
+  "accentColor": "#d7827e",
+  "enabledCssSnippets": ["kb-paper"]
+}

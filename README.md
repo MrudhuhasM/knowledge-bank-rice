@@ -3,8 +3,12 @@
 A complete desktop for CachyOS + Hyprland, designed as a personal knowledge bank: a calm, light,
 paper-like place to write, keep, read and review notes.
 
-- **Look:** warm cream paper, ink text, rose and gold accents (Rosé Pine Dawn). Serif headings, IBM Plex fonts, a ruled-notebook wallpaper.
-- **Desktop:** Hyprland (Lua config), floating-island **waybar**, **rofi** launcher, **mako** notifications, **hyprlock** lock screen that shows one of your own highlights, **hypridle**, **kitty** + **starship**, light GTK theme and Papirus icons.
+![Desktop preview](screenshots/desktop-preview.jpg)
+
+- **Look:** warm cream paper, ink text, one rose accent (Rosé Pine Dawn). Fraunces serif for clocks and headings, IBM Plex Mono for small uppercase labels, a halftone-orb wallpaper on textured paper.
+- **Desktop widgets (Quickshell):** a big serif clock with greeting, date and week number, plus paper cards for **weather**, your **notebook** (inbox, words today, streak), a **calendar** and a **highlight from your notes**. They sit on the wallpaper, under your windows.
+- **Desktop:** Hyprland (Lua config), floating-island **waybar**, **rofi** launcher, **mako** notifications, **hyprlock** lock screen that shows one of your own highlights, **hypridle**, **kitty** + **starship**.
+- **Readable everywhere:** one paper & ink palette applied to GTK 3/4 apps, Qt and KDE apps (qt6ct + KDE colour scheme), the terminal's 16 colours, fish, fzf, bat and Obsidian. Every text colour is at least 3.7:1 contrast on paper.
 - **Notes:** **Obsidian** and **Neovim (`kv`)** on the same Markdown vault, **zathura** for PDFs, and Super+K keys for capture, daily notes, search, review, screenshots-to-vault and focus mode.
 - **Safety:** your old desktop configs are backed up (`./restore.sh` puts them back), and the vault auto-commits to git every hour.
 
@@ -24,7 +28,7 @@ Then **reboot**. After logging in:
 - `Super + K` opens the knowledge-bank keys.
 
 First time only:
-1. In Obsidian, choose **Open folder as vault** and pick `~/vault`. Then Settings → Core plugins → turn on **Templates**. For the matching look: Settings → Appearance → Themes → **Rosé Pine**, light mode.
+1. In Obsidian, choose **Open folder as vault** and pick `~/vault`. Then Settings → Core plugins → turn on **Templates**. The paper theme is already switched on, as the `kb-paper` CSS snippet.
 2. Run `kv` once while online. It downloads its Neovim plugins.
 
 To update later: `git pull && ./install.sh` (it updates in place and keeps your original backup).
@@ -92,6 +96,13 @@ Obsidian opens on workspace 1 (Write), PDFs on 2 (Read), browsers on 3 (Web).
 ```
 
 Lines starting with `> ` (highlights) appear on the lock screen at random.
+
+## Widgets
+
+- **Weather** comes from [wttr.in](https://wttr.in). Set your city in `~/.config/kb/config`: `KB_WEATHER_LOCATION="Kochi"` (empty = guess from your IP) and `KB_WEATHER_UNITS="c"` or `"f"`. Click the card to refresh.
+- **Notebook** click opens today's note. **Highlight** click shows another one. Any line starting with `> ` in your notes can appear.
+- Restart the widgets after changing settings: `pkill quickshell; quickshell -c kb &`
+- Edit them in `~/.config/quickshell/kb/shell.qml`. Quickshell reloads live as you save.
 
 ## Customising
 

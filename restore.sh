@@ -12,7 +12,9 @@ src="${1:-$(cat "$CFG/kb-backup/latest" 2>/dev/null || true)}"
 
 # Same list as install.sh
 OWNED=(hypr waybar rofi mako kitty kbvim zathura starship.toml fish/conf.d/kb.fish
-       swaync dunst wofi fuzzel)
+       swaync dunst wofi fuzzel quickshell/kb qt6ct kdeglobals
+       gtk-3.0/gtk.css gtk-3.0/colors.css gtk-3.0/settings.ini
+       gtk-4.0/gtk.css gtk-4.0/colors.css gtk-4.0/settings.ini)
 parked="$CFG/kb-backup/removed-$(date +%Y%m%d-%H%M%S)"
 
 echo ":: Restoring from $src"
@@ -28,7 +30,7 @@ for item in "${OWNED[@]}"; do
   fi
 done
 
-rm -f "$CFG/kb-backup/latest"
+rm -f "$CFG/kb-backup/latest" "$CFG/kb/owned"
 systemctl --user disable --now kb-sync.timer >/dev/null 2>&1 || true
 echo ":: Done. Knowledge Bank configs were moved to $parked"
 echo ":: Reboot (or log out and in) to get your old desktop back."

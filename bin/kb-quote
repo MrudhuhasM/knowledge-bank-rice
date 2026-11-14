@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # kb-quote - print one random highlight from the vault (lines starting with "> ").
-# Used by the lock screen. Falls back to a short default line.
+#   kb-quote          for the lock screen (Pango-escaped, with a default line)
+#   kb-quote --plain  for the desktop widget (raw text, empty if there are none yet)
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/kb/config"
 # shellcheck source=/dev/null
 [[ -f $cfg ]] && source "$cfg"
@@ -8,10 +9,16 @@ vault="${KB_VAULT:-${VAULT:-$HOME/vault}}"
 
 q=""
 if [[ -d $vault ]]; then
-  q=$(grep -rh --include='*.md' --exclude-dir='.*' '^>[[:space:]]*[^[:space:]]' "$vault" 2>/dev/null |
-      sed 's/^>[[:space:]]*//' | awk 'length > 20 && length < 160' | shuf -n1)
+  q=$(grep -rh --include='*.md' --exclude-dir='.*' --exclude-dir=Templates \
+        '^>[[:space:]]*[^[:space:]]' "$vault" 2>/dev/null |
+      sed 's/^>[[:space:]]*//' | awk 'length > 20 && length < 180' | shuf -n1)
 fi
-[[ -z $q ]] && q="Write it down, link it up. Your notes remember so you can think."
 
+if [[ ${1:-} == --plain ]]; then
+  printf '%s\n' "$q"
+  exit 0
+fi
+
+[[ -z $q ]] && q="Write it down, link it up. Your notes remember so you can think."
 # hyprlock renders Pango markup, so escape it
 printf '%s\n' "$q" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# kb-weather - current weather as one JSON line for the desktop widget (via wttr.in).
+# Location: KB_WEATHER_LOCATION in ~/.config/kb/config (e.g. "Kochi" or "London").
+# Empty = wttr.in guesses from your IP address. Units: KB_WEATHER_UNITS=c (default) or f.
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}/kb/config"
+# shellcheck source=/dev/null
+[[ -f $cfg ]] && source "$cfg"
+loc="${KB_WEATHER_LOCATION:-}"
+units="${KB_WEATHER_UNITS:-c}"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/kb/weather.json"
+mkdir -p "$(dirname "$cache")"
+
+url="https://wttr.in/$(jq -rn --arg s "$loc" '$s|@uri')?format=j1"
+if json=$(curl -fsS --max-time 12 "$url" 2>/dev/null) && jq -e '.current_condition[0]' >/dev/null 2>&1 <<<"$json"; then
+  printf '%s' "$json" >"$cache"
+elif [[ -s $cache ]]; then
+  json=$(<"$cache")
+else
+  echo '{"ok":false}'
+  exit 0
+fi
+
+# Material Design weather glyphs (Nerd Font)
+jq -c --arg u "$units" --arg loc "$loc" '
+  def icon(c):
+    if   c == 113 then "󰖙"                                   # sunny
+    elif c == 116 then "󰖕"                                   # partly cloudy
+    elif c == 119 or c == 122 then "󰖐"                       # cloudy
+    elif [143,248,260] | index(c) then "󰖑"                   # fog
+    elif [200,386,389,392,395] | index(c) then "󰖓"           # thunder
+    elif [179,182,185,227,230,281,284,311,314,317,320,323,326,329,332,335,338,350,362,365,368,371,374,377] | index(c) then "󰖘" # snow
+    elif [299,302,305,308,356,359] | index(c) then "󰖖"       # heavy rain
+    else "󰖗" end;                                            # rain
+  .current_condition[0] as $n | .weather[0] as $d |
+  {
+    ok:    true,
+    temp:  (if $u == "f" then $n.temp_F else $n.temp_C end),
+    feels: (if $u == "f" then $n.FeelsLikeF else $n.FeelsLikeC end),
+    high:  (if $u == "f" then $d.maxtempF else $d.maxtempC end),
+    low:   (if $u == "f" then $d.mintempF else $d.mintempC end),
+    desc:  ($n.weatherDesc[0].value | gsub("^\\s+|\\s+$"; "")),
+    icon:  icon($n.weatherCode | tonumber),
+    place: (if $loc != "" then $loc else (.nearest_area[0].areaName[0].value // "weather") end)
+  }' <<<"$json" 2>/dev/null || echo '{"ok":false}'

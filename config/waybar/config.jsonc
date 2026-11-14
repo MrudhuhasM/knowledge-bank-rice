@@ -15,11 +15,11 @@
   "hyprland/workspaces": {
     "format": "{icon}",
     "format-icons": {
-      "1": "Write",
-      "2": "Read",
-      "3": "Web",
-      "4": "Term",
-      "5": "Misc",
+      "1": "WRITE",
+      "2": "READ",
+      "3": "WEB",
+      "4": "TERM",
+      "5": "MISC",
       "default": "{name}"
     },
     "persistent-workspaces": { "*": 5 }
@@ -32,17 +32,17 @@
   },
 
   "clock": {
-    "format": "{:%a %d %b  ·  %H:%M}",
+    "format": "{:%H:%M}",
+    "format-alt": "{:%a %d %b  ·  %H:%M}",
     "tooltip-format": "<tt>{calendar}</tt>",
     "calendar": {
       "mode": "month",
       "format": {
         "months": "<span color='#575279'><b>{}</b></span>",
-        "weekdays": "<span color='#d7827e'><b>{}</b></span>",
-        "today": "<span color='#ea9d34'><b><u>{}</u></b></span>"
+        "weekdays": "<span color='#b4637a'><b>{}</b></span>",
+        "today": "<span color='#b0700f'><b><u>{}</u></b></span>"
       }
-    },
-    "on-click": "~/.local/bin/kb-daily"
+    }
   },
 
   "custom/kb": {

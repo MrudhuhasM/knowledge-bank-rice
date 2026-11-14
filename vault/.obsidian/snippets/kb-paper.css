@@ -1,0 +1,79 @@
+/* Knowledge Bank: paper & ink for Obsidian (light mode).
+   Enabled by install.sh. Toggle in Settings → Appearance → CSS snippets. */
+
+.theme-light {
+  --kb-paper: #faf4ed;
+  --kb-card: #fffaf3;
+  --kb-fold: #f2e9e1;
+  --kb-low: #f4ede8;
+  --kb-line: #dfdad9;
+  --kb-muted: #7f7a93;
+  --kb-subtle: #6e6a86;
+  --kb-ink: #575279;
+  --kb-rose: #d7827e;
+  --kb-love: #b4637a;
+  --kb-gold: #b0700f;
+  --kb-pine: #286983;
+  --kb-iris: #907aa9;
+
+  --background-primary: var(--kb-card);
+  --background-primary-alt: var(--kb-paper);
+  --background-secondary: var(--kb-paper);
+  --background-secondary-alt: var(--kb-fold);
+  --background-modifier-border: var(--kb-line);
+  --background-modifier-border-hover: var(--kb-rose);
+  --background-modifier-hover: rgba(87, 82, 121, 0.06);
+  --background-modifier-active-hover: rgba(215, 130, 126, 0.15);
+
+  --text-normal: var(--kb-ink);
+  --text-muted: var(--kb-subtle);
+  --text-faint: var(--kb-muted);
+  --text-accent: var(--kb-love);
+  --text-accent-hover: var(--kb-rose);
+  --text-selection: rgba(215, 130, 126, 0.25);
+  --text-highlight-bg: rgba(234, 157, 52, 0.25);
+  --interactive-accent: var(--kb-rose);
+  --interactive-accent-hover: var(--kb-love);
+  --text-on-accent: var(--kb-card);
+
+  --link-color: var(--kb-pine);
+  --link-color-hover: var(--kb-love);
+  --link-external-color: var(--kb-iris);
+  --link-unresolved-color: var(--kb-love);
+  --tag-color: var(--kb-love);
+  --tag-background: rgba(215, 130, 126, 0.12);
+  --blockquote-border-color: var(--kb-rose);
+  --checkbox-color: var(--kb-rose);
+  --code-background: var(--kb-paper);
+  --code-normal: var(--kb-ink);
+
+  --h1-color: var(--kb-ink);
+  --h2-color: var(--kb-ink);
+  --h3-color: var(--kb-love);
+  --h4-color: var(--kb-pine);
+  --h5-color: var(--kb-subtle);
+  --h6-color: var(--kb-subtle);
+
+  --graph-node: var(--kb-subtle);
+  --graph-node-focused: var(--kb-rose);
+  --graph-line: var(--kb-line);
+}
+
+body {
+  --font-text-theme: "IBM Plex Serif", serif;
+  --font-interface-theme: "IBM Plex Sans", sans-serif;
+  --font-monospace-theme: "JetBrainsMono Nerd Font", monospace;
+  --h1-font: "Fraunces", "IBM Plex Serif", serif;
+  --h2-font: "Fraunces", "IBM Plex Serif", serif;
+  --h1-weight: 500;
+  --h2-weight: 500;
+  --line-height-normal: 1.65;
+}
+
+/* Highlights read like margin notes */
+.theme-light .markdown-rendered blockquote {
+  font-style: italic;
+  background: var(--kb-paper);
+  border-radius: 0 10px 10px 0;
+  padding: 0.4em 1em;
+}

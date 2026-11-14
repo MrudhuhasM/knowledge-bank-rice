@@ -44,6 +44,7 @@ hl.monitor({
 hl.on("hyprland.start", function()
     hl.exec_cmd("swaybg -m fill -i " .. home .. "/.local/share/kb/wallpaper.png")
     hl.exec_cmd("waybar")
+    hl.exec_cmd("quickshell -c kb") -- desktop widgets: clock, weather, notebook, calendar, highlight
     hl.exec_cmd("mako")
     hl.exec_cmd("hypridle")
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
@@ -60,6 +61,10 @@ hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto") -- Obsidian runs natively on Wayland
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
+hl.env("QT_QPA_PLATFORMTHEME", "qt6ct") -- Qt/KDE apps use the paper palette
+-- Light-friendly colours for terminal tools
+hl.env("BAT_THEME", "OneHalfLight")
+hl.env("FZF_DEFAULT_OPTS", "--color=fg:#575279,bg:-1,hl:#bb625e,fg+:#575279,bg+:#f2e9e1,hl+:#b4637a,info:#7f7a93,prompt:#bb625e,pointer:#b4637a,marker:#b0700f,spinner:#907aa9,header:#286983,border:#dfdad9,gutter:-1")
 
 
 -----------------------

@@ -29,10 +29,10 @@ command -v pacman >/dev/null || die "pacman not found - this is for CachyOS / Ar
 PKGS=(
   # desktop
   hyprland hypridle hyprlock hyprpolkitagent xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
-  waybar mako swaybg kitty starship
+  waybar mako swaybg kitty starship quickshell qt6ct
   # utilities
   cliphist wl-clipboard grim slurp brightnessctl playerctl pavucontrol network-manager-applet
-  libnotify jq ripgrep fzf bat git xdg-utils
+  libnotify jq ripgrep fzf bat git xdg-utils curl fontconfig
   # knowledge bank
   obsidian neovim zathura zathura-pdf-mupdf
   # look
@@ -69,25 +69,42 @@ found=()
 [[ -f $CFG/hypr/knowledge-bank.conf ]]              && found+=("earlier Knowledge Bank add-on")
 if (( ${#found[@]} )); then say "Found existing setup: ${found[*]}"; fi
 
-# Everything this rice owns. Whatever exists is moved into the backup folder.
+# Everything this rice owns (keep in sync with restore.sh).
+# Whatever exists and isn't already ours is moved into the backup folder.
 OWNED=(hypr waybar rofi mako kitty kbvim zathura starship.toml fish/conf.d/kb.fish
-       swaync dunst wofi fuzzel)
-if grep -qs "Knowledge Bank" "$CFG/hypr/hyprland.lua"; then
-  # Re-run: already on this rice, so just update files and keep the ORIGINAL backup
-  say "Knowledge Bank already installed - updating in place (original backup kept)."
-  BACKUP=""
+       swaync dunst wofi fuzzel quickshell/kb qt6ct kdeglobals
+       gtk-3.0/gtk.css gtk-3.0/colors.css gtk-3.0/settings.ini
+       gtk-4.0/gtk.css gtk-4.0/colors.css gtk-4.0/settings.ini)
+OWNED_LIST="$CFG/kb/owned"
+
+# Which items are already ours from an earlier install?
+declare -A ours=()
+if [[ -f $OWNED_LIST ]]; then
+  while IFS= read -r item; do ours[$item]=1; done <"$OWNED_LIST"
+elif grep -qs "Knowledge Bank" "$CFG/hypr/hyprland.lua"; then
+  # installed by the previous version, which didn't keep a list
+  for item in hypr waybar rofi mako kitty kbvim zathura starship.toml fish/conf.d/kb.fish swaync dunst wofi fuzzel; do
+    ours[$item]=1
+  done
+fi
+
+if (( ${#ours[@]} )); then
+  # Update: add newly-owned files to the ORIGINAL backup
+  BACKUP=$(cat "$CFG/kb-backup/latest" 2>/dev/null || echo "$BACKUP")
+  say "Knowledge Bank already installed - updating (backup: $BACKUP)"
 else
   say "Backing up current configs to $BACKUP"
-  mkdir -p "$BACKUP"
-  for item in "${OWNED[@]}"; do
-    if [[ -e $CFG/$item || -L $CFG/$item ]]; then
-      mkdir -p "$BACKUP/$(dirname "$item")"
-      mv "$CFG/$item" "$BACKUP/$item"
-      printf '   moved %s\n' "$item"
-    fi
-  done
-  echo "$BACKUP" >"$CFG/kb-backup/latest"
 fi
+mkdir -p "$BACKUP"
+for item in "${OWNED[@]}"; do
+  [[ -n ${ours[$item]:-} ]] && continue
+  if [[ -e $CFG/$item || -L $CFG/$item ]] && [[ ! -e $BACKUP/$item ]]; then
+    mkdir -p "$BACKUP/$(dirname "$item")"
+    mv "$CFG/$item" "$BACKUP/$item"
+    printf '   moved %s\n' "$item"
+  fi
+done
+echo "$BACKUP" >"$CFG/kb-backup/latest"
 rm -f "$BIN/kb-focus" # from the earlier add-on version
 
 # ── 4. Install configs, scripts, wallpaper ───────────────────────
@@ -95,6 +112,28 @@ say "Installing the Knowledge Bank desktop"
 mkdir -p "$CFG"
 cp -r "$HERE/config/." "$CFG/"
 sed -i "s|@BIN@|$BIN|g" "$CFG/zathura/zathurarc"
+sed -i "s|@HOME@|$HOME|g" "$CFG/qt6ct/qt6ct.conf"
+mkdir -p "$CFG/kb"
+printf '%s\n' "${OWNED[@]}" >"$OWNED_LIST"
+
+# Fraunces (display serif for clocks and headings, SIL OFL) from Google Fonts
+FONTDIR="$HOME/.local/share/fonts/fraunces"
+if ! fc-list 2>/dev/null | grep -qi fraunces; then
+  say "Downloading the Fraunces font (Google Fonts, OFL)"
+  base="https://raw.githubusercontent.com/google/fonts/main/ofl/fraunces"
+  mkdir -p "$FONTDIR"
+  if curl -fsSL --max-time 60 -o "$FONTDIR/Fraunces.ttf"        "$base/Fraunces%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf" &&
+     curl -fsSL --max-time 60 -o "$FONTDIR/Fraunces-Italic.ttf" "$base/Fraunces-Italic%5BSOFT%2CWONK%2Copsz%2Cwght%5D.ttf" &&
+     curl -fsSL --max-time 30 -o "$FONTDIR/OFL.txt"             "$base/OFL.txt"; then
+    fc-cache -f "$FONTDIR" >/dev/null
+  else
+    rm -rf "$FONTDIR"
+    warn "Couldn't download Fraunces - using IBM Plex Serif instead."
+    sed -i 's/"Fraunces"/"IBM Plex Serif"/' "$CFG/quickshell/kb/shell.qml"
+    sed -i 's/^\$serif = Fraunces/$serif = IBM Plex Serif/' "$CFG/hypr/hyprlock.conf"
+    sed -i 's/"Fraunces Italic 13"/"IBM Plex Serif Italic 12"/' "$CFG/rofi/config.rasi"
+  fi
+fi
 
 install -Dm644 "$HERE/share/wallpaper.png" "$SHARE/wallpaper.png"
 
@@ -103,8 +142,9 @@ for f in "$HERE"/bin/*; do
   install -m755 "$f" "$BIN/$(basename "$f")"
 done
 
-mkdir -p "$CFG/kb"
 [[ -f $CFG/kb/config ]] || printf 'VAULT="%s"\n' "$VAULT" >"$CFG/kb/config"
+grep -q '^KB_WEATHER_LOCATION=' "$CFG/kb/config" ||
+  printf '# Weather widget: a city name (empty = guess from your IP), units c or f\nKB_WEATHER_LOCATION=""\nKB_WEATHER_UNITS="c"\n' >>"$CFG/kb/config"
 
 # bash users get the prompt too (fish is handled by conf.d/kb.fish)
 if [[ -f $HOME/.bashrc ]] && ! grep -q 'starship init bash' "$HOME/.bashrc"; then
@@ -127,7 +167,19 @@ xdg-mime default org.pwmt.zathura.desktop application/pdf 2>/dev/null || true
 
 # ── 6. Vault ─────────────────────────────────────────────────────
 if [[ -e $VAULT ]]; then
-  say "Vault $VAULT already exists - left untouched."
+  say "Vault $VAULT already exists - notes untouched; adding the paper theme for Obsidian."
+  mkdir -p "$VAULT/.obsidian/snippets"
+  cp "$HERE/vault/.obsidian/snippets/kb-paper.css" "$VAULT/.obsidian/snippets/"
+  app="$VAULT/.obsidian/appearance.json"
+  [[ -s $app ]] || echo '{}' >"$app"
+  tmp=$(mktemp)
+  if jq '.theme = "moonstone" | .accentColor = "#d7827e"
+         | .enabledCssSnippets = (((.enabledCssSnippets // []) + ["kb-paper"]) | unique)' "$app" >"$tmp"; then
+    mv "$tmp" "$app"
+  else
+    rm -f "$tmp"
+  fi
+  pgrep -x obsidian >/dev/null && warn "Obsidian is open - restart it to pick up the paper theme."
 else
   say "Creating vault at $VAULT"
   cp -r "$HERE/vault" "$VAULT"

@@ -1,18 +1,20 @@
-/* Knowledge Bank: paper & ink islands (Rosé Pine Dawn) */
-@define-color paper #faf4ed;
-@define-color card  #fffaf3;
-@define-color fold  #f2e9e1;
-@define-color line  #dfdad9;
-@define-color muted #9893a5;
-@define-color ink   #575279;
-@define-color rose  #d7827e;
-@define-color gold  #ea9d34;
-@define-color love  #b4637a;
-@define-color pine  #286983;
+/* Knowledge Bank: paper & ink islands (Rosé Pine Dawn).
+   Mono uppercase labels, one accent colour, every text colour readable on paper. */
+@define-color paper  #faf4ed;
+@define-color card   #fffaf3;
+@define-color fold   #f2e9e1;
+@define-color line   #dfdad9;
+@define-color subtle #6e6a86;
+@define-color ink    #575279;
+@define-color rose   #d7827e;
+@define-color love   #b4637a;
+@define-color gold   #b0700f;
+@define-color pine   #286983;
 
 * {
-  font-family: "IBM Plex Sans", "JetBrainsMono Nerd Font";
-  font-size: 13px;
+  font-family: "IBM Plex Mono", "JetBrainsMono Nerd Font";
+  font-size: 12px;
+  letter-spacing: 1px;
   min-height: 0;
   border: none;
   border-radius: 0;
@@ -26,19 +28,20 @@ window#waybar {
 tooltip {
   background: @card;
   border: 1px solid @line;
-  border-radius: 10px;
+  border-radius: 12px;
 }
-tooltip label { color: @ink; }
+tooltip label { color: @ink; letter-spacing: 0; }
 
 /* every module is its own little card */
 #workspaces, #window, #clock, #custom-kb, #pulseaudio, #backlight,
 #network, #battery, #tray, #custom-power {
-  background: @card;
+  background: alpha(@card, 0.92);
+  color: @ink;
   border: 1px solid @line;
   border-radius: 14px;
   padding: 0 14px;
   margin: 2px 0;
-  box-shadow: 0 2px 6px alpha(@ink, 0.08);
+  box-shadow: 0 3px 8px alpha(@ink, 0.10);
 }
 
 window#waybar.empty #window {
@@ -51,37 +54,43 @@ window#waybar.empty #window {
 #workspaces button {
   padding: 0 10px;
   margin: 4px 1px;
-  color: @muted;
+  color: @subtle;
   background: transparent;
   border-radius: 10px;
+  border-bottom: 2px solid transparent;
 }
 #workspaces button.active {
   color: @ink;
   background: @fold;
-  font-weight: 600;
+  border-bottom: 2px solid @rose;
 }
 #workspaces button.urgent { color: @love; }
 #workspaces button:hover {
-  background: alpha(@rose, 0.15);
+  background: alpha(@rose, 0.14);
+  color: @ink;
   box-shadow: none;
   text-shadow: none;
 }
 
-#window { color: @muted; font-style: italic; }
-
-#clock {
+#window {
   font-family: "IBM Plex Serif";
-  font-size: 14px;
-  font-weight: 500;
-  padding: 0 18px;
+  font-style: italic;
+  letter-spacing: 0;
+  font-size: 13px;
+  color: @subtle;
 }
 
-#custom-kb { color: @rose; font-weight: 600; }
+#clock { font-weight: 600; padding: 0 18px; }
+
+#custom-kb { color: @love; }
 #custom-kb.busy { color: @gold; }
 
 #battery.warning { color: @gold; }
 #battery.critical:not(.charging) { color: @love; }
-#network.disconnected { color: @muted; }
-#pulseaudio.muted { color: @muted; }
+#network.disconnected { color: @subtle; }
+#pulseaudio.muted { color: @subtle; }
 
 #custom-power { color: @love; padding: 0 14px 0 12px; }
+
+menu, menuitem { background: @card; color: @ink; }
+menuitem:hover { background: @fold; }
