@@ -28,11 +28,11 @@ kb_die() {
 
 [[ -d $VAULT ]] || kb_die "Vault not found: $VAULT"
 
-# kb_menu PROMPT  - options on stdin (or </dev/null for free text), prints choice
+# kb_menu PROMPT [LINES]  - options on stdin (or </dev/null with LINES=0 for free text), prints choice
 kb_menu() {
-  local prompt=$1
+  local prompt=$1 lines=${2:-8}
   if command -v rofi >/dev/null; then
-    rofi -dmenu -i -p "$prompt"
+    rofi -dmenu -i -p "$prompt" -l "$lines"
   elif command -v fuzzel >/dev/null; then
     fuzzel --dmenu --prompt "$prompt > "
   elif command -v wofi >/dev/null; then
@@ -42,11 +42,11 @@ kb_menu() {
   fi
 }
 
-# kb_term [--float] CLASS CMD...  - open CMD in a terminal window
+# kb_term [--float] CLASS CMD...  - open CMD in a terminal window.
+# --float gives the window class "kb.float", which hyprland.lua floats and centres.
 kb_term() {
-  local float=0
-  if [[ $1 == --float ]]; then float=1; shift; fi
-  local class=$1; shift
+  local class
+  if [[ $1 == --float ]]; then class=kb.float; shift 2; else class=$1; shift; fi
   local term="${KB_TERMINAL:-}" t
   if [[ -z $term ]]; then
     for t in kitty ghostty alacritty foot wezterm; do
@@ -56,17 +56,13 @@ kb_term() {
   local -a cmd
   case $term in
     kitty)     cmd=(kitty --class "$class" -e "$@") ;;
-    ghostty)   cmd=(ghostty -e "$@") ;;
+    ghostty)   cmd=(ghostty "--class=$class" -e "$@") ;;
     alacritty) cmd=(alacritty --class "$class" -e "$@") ;;
     foot)      cmd=(foot --app-id "$class" "$@") ;;
     wezterm)   cmd=(wezterm start --class "$class" -- "$@") ;;
     *)         kb_die "No supported terminal (kitty, ghostty, alacritty, foot, wezterm). Set KB_TERMINAL." ;;
   esac
-  if (( float )) && command -v hyprctl >/dev/null; then
-    hyprctl dispatch exec "[float; size 1100 650; center] $(printf '%q ' "${cmd[@]}")" >/dev/null
-  else
-    setsid -f "${cmd[@]}" >/dev/null 2>&1
-  fi
+  setsid -f "${cmd[@]}" >/dev/null 2>&1
 }
 
 # kb_render_template TEMPLATE TITLE  - fill {{title}} {{date}} {{time}}

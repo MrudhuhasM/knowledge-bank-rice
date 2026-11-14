@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# kb-keys - cheat sheet of all keybindings (Super+/).
+rofi -dmenu -i -p "keys" -l 16 -mesg "Type to filter · Esc to close" >/dev/null <<'EOF'
+Super + Space          open an app
+Super + Return         terminal
+Super + Q              close window
+Super + E              file manager
+Super + F              fullscreen
+Super + V              float / unfloat window
+Super + J              split direction
+Super + arrows         move focus
+Super + Shift + arrows move window
+Super + 1…5            workspace: Write · Read · Web · Term · Misc
+Super + Shift + 1…5    send window to workspace
+Super + S              scratchpad (Shift: send window there)
+Super + drag           move window (right-drag resizes)
+Super + B              hide / show bar
+Super + C              clipboard history
+Super + Escape         lock screen
+Super + Shift + E      power menu
+Print / Shift + Print  screenshot area to clipboard / full screen to file
+Super + /              this list
+── Knowledge Bank: Super + K, then ──
+C                      capture a thought to Inbox
+P                      capture the clipboard to Inbox
+D / Shift + D          today's note in Neovim / Obsidian
+N / Shift + N          new note / new source (book, article)
+G                      screenshot into the vault
+S                      search all notes
+R                      review session
+O                      Obsidian
+V                      vault in Neovim
+I / H                  Inbox / Home
+F                      focus mode on / off
+EOF

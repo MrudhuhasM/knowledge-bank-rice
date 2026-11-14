@@ -1,0 +1,92 @@
+/* Knowledge Bank: rofi launcher and menus (paper & ink) */
+configuration {
+  modi: "drun,run,window";
+  show-icons: true;
+  icon-theme: "Papirus-Light";
+  font: "IBM Plex Sans 12";
+  drun-display-format: "{name}";
+  display-drun: "open";
+  display-run: "run";
+  display-window: "windows";
+  display-dmenu: "kb";
+}
+
+* {
+  paper:  #faf4ed;
+  card:   #fffaf3;
+  fold:   #f2e9e1;
+  line:   #dfdad9;
+  muted:  #9893a5;
+  ink:    #575279;
+  rose:   #d7827e;
+
+  background-color: transparent;
+  text-color: @ink;
+}
+
+window {
+  width: 560px;
+  background-color: @paper;
+  border: 2px;
+  border-color: @rose;
+  border-radius: 18px;
+  padding: 20px;
+}
+
+mainbox {
+  spacing: 14px;
+  children: [ inputbar, message, listview ];
+}
+
+inputbar {
+  background-color: @card;
+  border: 1px;
+  border-color: @line;
+  border-radius: 12px;
+  padding: 10px 14px;
+  spacing: 10px;
+  children: [ prompt, entry ];
+}
+
+prompt {
+  text-color: @rose;
+  font: "IBM Plex Serif Italic 12";
+}
+
+entry {
+  placeholder: "type…";
+  placeholder-color: @muted;
+  cursor: text;
+}
+
+message {
+  background-color: @card;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+textbox { text-color: @muted; }
+
+listview {
+  lines: 8;
+  columns: 1;
+  spacing: 4px;
+  fixed-height: false;
+  scrollbar: false;
+}
+
+element {
+  padding: 8px 12px;
+  border-radius: 10px;
+  spacing: 12px;
+}
+element normal.normal, element alternate.normal { background-color: transparent; }
+element selected.normal {
+  background-color: @fold;
+  text-color: @ink;
+}
+element-icon { size: 22px; }
+element-text {
+  vertical-align: 0.5;
+  text-color: inherit;
+  highlight: bold #d7827e;
+}

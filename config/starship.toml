@@ -1,0 +1,24 @@
+# Knowledge Bank: a quiet prompt
+add_newline = true
+format = "$directory$git_branch$git_status$cmd_duration$line_break$character"
+
+[directory]
+style = "bold #286983"
+truncation_length = 3
+truncation_symbol = "…/"
+substitutions = { "~/vault" = "vault" }
+
+[git_branch]
+format = "[ $branch]($style) "
+style = "#907aa9"
+
+[git_status]
+style = "#ea9d34"
+
+[cmd_duration]
+format = "[$duration]($style) "
+style = "#9893a5"
+
+[character]
+success_symbol = "[❯](bold #d7827e)"
+error_symbol = "[❯](bold #b4637a)"

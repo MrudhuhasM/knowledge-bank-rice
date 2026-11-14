@@ -1,0 +1,93 @@
+// Knowledge Bank: floating-island bar
+{
+  "layer": "top",
+  "position": "top",
+  "height": 36,
+  "margin-top": 8,
+  "margin-left": 14,
+  "margin-right": 14,
+  "spacing": 8,
+
+  "modules-left": ["hyprland/workspaces", "hyprland/window"],
+  "modules-center": ["clock"],
+  "modules-right": ["custom/kb", "pulseaudio", "backlight", "network", "battery", "tray", "custom/power"],
+
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "format-icons": {
+      "1": "Write",
+      "2": "Read",
+      "3": "Web",
+      "4": "Term",
+      "5": "Misc",
+      "default": "{name}"
+    },
+    "persistent-workspaces": { "*": 5 }
+  },
+
+  "hyprland/window": {
+    "format": "{}",
+    "max-length": 42,
+    "separate-outputs": true
+  },
+
+  "clock": {
+    "format": "{:%a %d %b  ·  %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>",
+    "calendar": {
+      "mode": "month",
+      "format": {
+        "months": "<span color='#575279'><b>{}</b></span>",
+        "weekdays": "<span color='#d7827e'><b>{}</b></span>",
+        "today": "<span color='#ea9d34'><b><u>{}</u></b></span>"
+      }
+    },
+    "on-click": "~/.local/bin/kb-daily"
+  },
+
+  "custom/kb": {
+    "exec": "~/.local/bin/kb-stats",
+    "return-type": "json",
+    "interval": 60,
+    "on-click": "~/.local/bin/kb-daily",
+    "on-click-right": "~/.local/bin/kb-review",
+    "on-click-middle": "~/.local/bin/kb-capture"
+  },
+
+  "pulseaudio": {
+    "format": "{icon}  {volume}%",
+    "format-muted": "󰝟  muted",
+    "format-icons": { "default": ["󰕿", "󰖀", "󰕾"] },
+    "on-click": "pavucontrol",
+    "scroll-step": 5
+  },
+
+  "backlight": {
+    "format": "󰃠  {percent}%",
+    "scroll-step": 5
+  },
+
+  "network": {
+    "format-wifi": "󰖩  {essid}",
+    "format-ethernet": "󰈀  wired",
+    "format-disconnected": "󰖪  offline",
+    "tooltip-format": "{ifname}  {ipaddr}",
+    "max-length": 20,
+    "on-click": "nm-connection-editor"
+  },
+
+  "battery": {
+    "states": { "warning": 25, "critical": 12 },
+    "format": "{icon}  {capacity}%",
+    "format-charging": "󰂄  {capacity}%",
+    "format-icons": ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"]
+  },
+
+  "tray": { "spacing": 8, "icon-size": 16 },
+
+  "custom/power": {
+    "format": "",
+    "tooltip-format": "Power menu",
+    "on-click": "~/.local/bin/kb-power"
+  }
+}

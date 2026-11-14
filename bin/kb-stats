@@ -17,6 +17,6 @@ done
 
 notes=$(find "$VAULT" -name '*.md' -not -path '*/.*' | wc -l)
 
-printf '{"text":"inbox %s · %sw · %sd","tooltip":"Inbox items: %s\\nWords in today'"'"'s note: %s\\nDaily-note streak: %s days\\nNotes in vault: %s\\n\\nClick: today   Right-click: review","class":"%s"}\n' \
+printf '{"text":"  %s · %sw · %sd","tooltip":"Inbox items: %s\\nWords in today'"'"'s note: %s\\nDaily-note streak: %s days\\nNotes in vault: %s\\n\\nClick: today   Right-click: review","class":"%s"}\n' \
   "$inbox" "$words" "$streak" "$inbox" "$words" "$streak" "$notes" \
   "$( (( inbox > 10 )) && echo busy || echo ok)"

@@ -10,7 +10,7 @@ if [[ ${1:-} == --source ]]; then
   dir=$SOURCES_DIR template=source prompt="New source"
 fi
 
-title=$(kb_menu "$prompt" </dev/null) || exit 0
+title=$(kb_menu "$prompt" 0 </dev/null) || exit 0
 # Characters Obsidian can't use in file names
 title=$(printf '%s' "$title" | tr -d '/\\:*?"<>|' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
 [[ -z $title ]] && exit 0

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# kb-clipboard - pick something from clipboard history and copy it again.
+sel=$(cliphist list | rofi -dmenu -i -p "clipboard" -display-columns 2) || exit 0
+printf '%s' "$sel" | cliphist decode | wl-copy

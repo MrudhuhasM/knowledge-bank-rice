@@ -11,7 +11,7 @@ if [[ ${1:-} == --clip ]]; then
 elif (( $# )); then
   text="$*"
 else
-  text=$(kb_menu "Capture" </dev/null) || exit 0
+  text=$(kb_menu "Capture" 0 </dev/null) || exit 0
 fi
 
 [[ -z ${text//[[:space:]]/} ]] && exit 0

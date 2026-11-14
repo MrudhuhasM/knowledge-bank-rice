@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# kb-power - lock / suspend / log out / reboot / shut down menu.
+choice=$(printf '%s\n' "  Lock" "󰤄  Suspend" "󰍃  Log out" "  Reboot" "  Shut down" |
+  rofi -dmenu -i -p "power" -l 5) || exit 0
+
+case $choice in
+  *Lock)      pidof hyprlock || hyprlock ;;
+  *Suspend)   systemctl suspend ;;
+  *"Log out") hyprctl dispatch 'hl.dsp.exit()' ;;
+  *Reboot)    systemctl reboot ;;
+  *"Shut down") systemctl poweroff ;;
+esac
