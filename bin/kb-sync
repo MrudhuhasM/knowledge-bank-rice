@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# kb-sync - commit any vault changes to git (run hourly by kb-sync.timer).
+# If the vault repo has a remote, it also pushes.
+# shellcheck source=kb-common
+source "$(dirname "$(readlink -f "$0")")/kb-common"
+
+cd "$VAULT" || exit 1
+git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+git add -A
+git diff --cached --quiet && exit 0
+git commit -qm "auto: $(date '+%F %H:%M')"
+
+if [[ -n $(git remote) ]]; then
+  git push -q 2>/dev/null || kb_notify "Vault push failed" "Committed locally; check the remote."
+fi

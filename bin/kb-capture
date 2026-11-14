@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# kb-capture - drop a thought into Inbox.md without leaving what you're doing.
+#   kb-capture            prompt for one line
+#   kb-capture --clip     capture the clipboard (e.g. text copied from a PDF)
+#   kb-capture some text  capture the arguments
+# shellcheck source=kb-common
+source "$(dirname "$(readlink -f "$0")")/kb-common"
+
+if [[ ${1:-} == --clip ]]; then
+  text=$(wl-paste --no-newline 2>/dev/null) || kb_die "Clipboard is empty"
+elif (( $# )); then
+  text="$*"
+else
+  text=$(kb_menu "Capture" </dev/null) || exit 0
+fi
+
+[[ -z ${text//[[:space:]]/} ]] && exit 0
+
+stamp=$(date '+%Y-%m-%d %H:%M')
+[[ -f $INBOX ]] || printf '# Inbox\n\n' >"$INBOX"
+
+if [[ $text == *$'\n'* ]]; then
+  printf -- '- [ ] %s (clipping)\n' "$stamp" >>"$INBOX"
+  printf '%s\n' "$text" | sed 's/^/    > /' >>"$INBOX"
+else
+  printf -- '- [ ] %s - %s\n' "$stamp" "$text" >>"$INBOX"
+fi
+
+kb_notify "Captured to Inbox" "${text:0:80}"

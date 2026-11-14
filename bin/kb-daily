@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# kb-daily - open (and create if needed) today's daily note.
+#   kb-daily             open in kv (Neovim)
+#   kb-daily --obsidian  open in Obsidian
+#   kb-daily --print     just print the path
+# shellcheck source=kb-common
+source "$(dirname "$(readlink -f "$0")")/kb-common"
+
+today=$(date +%F)
+file="$DAILY_DIR/$today.md"
+mkdir -p "$DAILY_DIR"
+
+if [[ ! -f $file ]]; then
+  if [[ -f $TEMPLATES_DIR/daily.md ]]; then
+    kb_render_template "$TEMPLATES_DIR/daily.md" "$today" >"$file"
+  else
+    printf '# %s\n\n' "$today" >"$file"
+  fi
+fi
+
+case ${1:-} in
+  --obsidian) kb_obsidian_open "Daily/$today" ;;
+  --print)    echo "$file" ;;
+  *)          kb_term kb-daily "$KV" "$file" ;;
+esac

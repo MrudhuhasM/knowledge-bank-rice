@@ -1,0 +1,42 @@
+# zathura — PDF / book reader for the Knowledge Bank (Rosé Pine Dawn colours)
+# Select text with the mouse, then press C to send it to the Inbox.
+# Ctrl+R flips to dark (recolor) for night reading.
+
+set selection-clipboard clipboard
+set font "IBM Plex Sans 11"
+set adjust-open "width"
+set scroll-page-aware true
+set smooth-scroll true
+set guioptions "s"
+set window-title-basename true
+set statusbar-home-tilde true
+
+map C exec "@BIN@/kb-capture --clip"
+map <C-r> recolor
+
+set default-bg            "#faf4ed"
+set default-fg            "#575279"
+set statusbar-bg          "#f2e9e1"
+set statusbar-fg          "#575279"
+set inputbar-bg           "#faf4ed"
+set inputbar-fg           "#575279"
+set notification-bg       "#f2e9e1"
+set notification-fg       "#575279"
+set notification-error-bg "#f2e9e1"
+set notification-error-fg "#b4637a"
+set notification-warning-bg "#f2e9e1"
+set notification-warning-fg "#ea9d34"
+set completion-bg         "#f2e9e1"
+set completion-fg         "#575279"
+set completion-highlight-bg "#dfdad9"
+set completion-highlight-fg "#575279"
+set index-bg              "#faf4ed"
+set index-fg              "#575279"
+set index-active-bg       "#dfdad9"
+set index-active-fg       "#575279"
+set highlight-color       "rgba(234,157,52,0.45)"
+set highlight-active-color "rgba(215,130,126,0.55)"
+
+set recolor-lightcolor    "#232136"
+set recolor-darkcolor     "#e0def4"
+set recolor-keephue       true

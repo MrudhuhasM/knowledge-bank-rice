@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# kb-focus - toggle a distraction-free mode: no gaps, rounding, blur or animations,
+# bar hidden (waybar), notifications paused. Toggling off reloads your normal Hyprland config.
+
+state="${XDG_RUNTIME_DIR:-/tmp}/kb-focus"
+
+pause_notifications() { # on|off
+  if command -v makoctl >/dev/null; then
+    if [[ $1 == on ]]; then makoctl mode -a do-not-disturb; else makoctl mode -r do-not-disturb; fi
+  elif command -v swaync-client >/dev/null; then
+    if [[ $1 == on ]]; then swaync-client -dn; else swaync-client -df; fi
+  elif command -v dunstctl >/dev/null; then
+    if [[ $1 == on ]]; then dunstctl set-paused true; else dunstctl set-paused false; fi
+  fi
+} >/dev/null 2>&1
+
+if [[ -f $state ]]; then
+  rm -f "$state"
+  hyprctl reload >/dev/null
+  pkill -SIGUSR1 -x waybar 2>/dev/null
+  pause_notifications off
+  notify-send -a "Knowledge Bank" "Focus mode off" 2>/dev/null
+else
+  touch "$state"
+  hyprctl --batch "\
+    keyword general:gaps_in 0; \
+    keyword general:gaps_out 0; \
+    keyword general:border_size 1; \
+    keyword decoration:rounding 0; \
+    keyword decoration:blur:enabled false; \
+    keyword decoration:shadow:enabled false; \
+    keyword animations:enabled false" >/dev/null
+  pkill -SIGUSR1 -x waybar 2>/dev/null
+  pause_notifications on
+fi
