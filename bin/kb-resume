@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""kb-resume - "where you left off" for the desktop, as one JSON object.
+
+Reads the vault's own conventions (type/status/progress frontmatter, tracks
+with milestones, sources with a Contents checklist, concept maturity,
+#question tasks, Journal/ study logs). Falls back gracefully for a plain
+vault: whatever isn't there is simply left out.
+
+Read-only: it never writes to the vault.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+# ── config ───────────────────────────────────────────────────────────
+def load_config():
+    cfg = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "kb" / "config"
+    vals = {}
+    if cfg.is_file():
+        for line in cfg.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = re.match(r'\s*([A-Z_]+)=["\']?(.*?)["\']?\s*$', line)
+            if m:
+                vals[m.group(1)] = m.group(2)
+    return vals
+
+CFG = load_config()
+VAULT = Path(os.path.expandvars(os.path.expanduser(
+    os.environ.get("KB_VAULT") or CFG.get("VAULT") or "~/vault"))).resolve()
+NOW = time.time()
+TODAY = date.today()
+
+SKIP_DIRS = {"_System", "Templates", ".obsidian", ".trash", ".git"}
+SKIP_FILES = {"Home.md", "AGENTS.md"}
+STATUS_ICON = {"seed": "🌱", "growing": "🌿", "solid": "🌳"}
+
+# ── helpers ──────────────────────────────────────────────────────────
+def notes():
+    for root, dirs, files in os.walk(VAULT):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        for f in files:
+            if f.endswith(".md") and f not in SKIP_FILES:
+                yield Path(root) / f
+
+def read(p):
+    try:
+        return p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+def frontmatter(text):
+    """Tiny YAML subset: `key: value` and `key:` followed by `  - item` lists."""
+    fm = {}
+    if not text.startswith("---"):
+        return fm, text
+    end = text.find("\n---", 3)
+    if end == -1:
+        return fm, text
+    key = None
+    for line in text[3:end].splitlines():
+        m = re.match(r"^([A-Za-z_][\w-]*):\s*(.*)$", line)
+        if m:
+            key, val = m.group(1), m.group(2).strip().strip('"\'')
+            fm[key] = val if val else []
+        elif key and re.match(r"^\s+-\s+", line):
+            item = re.sub(r"^\s+-\s+", "", line).strip().strip('"\'')
+            if not isinstance(fm.get(key), list):
+                fm[key] = []
+            fm[key].append(item)
+    return fm, text[end + 4:]
+
+def unlink(s):
+    """[[a/b#c|Shown]] -> Shown, [[a/b]] -> b; strip markdown emphasis and tags."""
+    s = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", r"\2", s)
+    s = re.sub(r"\[\[([^\]]+)\]\]", lambda m: m.group(1).split("/")[-1].split("#")[0], s)
+    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
+    s = re.sub(r"[*_`]", "", s)
+    s = re.sub(r"\s#[\w/-]+", "", s)
+    return re.sub(r"\s+", " ", s).strip(" -·→")
+
+def links(s):
+    return [m.split("|")[-1].split("/")[-1].split("#")[0] for m in re.findall(r"\[\[([^\]]+)\]\]", s)]
+
+def rel(p):
+    return p.relative_to(VAULT).as_posix()
+
+def ago(ts):
+    secs = max(0, NOW - ts)
+    days = (TODAY - date.fromtimestamp(ts)).days
+    if secs < 90:
+        return "just now"
+    if secs < 3600:
+        return f"{int(secs // 60)} min ago"
+    if days == 0:
+        return f"{int(secs // 3600)} h ago"
+    if days == 1:
+        return "yesterday"
+    if days < 14:
+        return f"{days} days ago"
+    return f"{days // 7} weeks ago"
+
+def git_times():
+    """Last commit time per file. A fresh clone gives every file the same
+    mtime, so in a git vault the history is the better 'last touched'."""
+    if not (VAULT / ".git").exists():
+        return {}, set()
+    try:
+        log = subprocess.run(["git", "-C", str(VAULT), "log", "--format=@%ct", "--name-only", "--no-renames"],
+                             capture_output=True, text=True, encoding="utf-8", timeout=10).stdout
+        dirty = subprocess.run(["git", "-C", str(VAULT), "status", "--porcelain", "-z"],
+                               capture_output=True, text=True, encoding="utf-8", timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return {}, set()
+    times, ts = {}, None
+    for line in log.splitlines():
+        if line.startswith("@"):
+            ts = int(line[1:])
+        elif line and ts is not None:
+            times.setdefault(line.strip('"'), ts)
+    changed = {e[3:] for e in dirty.split("\0") if len(e) > 3}
+    return times, changed
+
+# ── gather ───────────────────────────────────────────────────────────
+def main():
+    if not VAULT.is_dir():
+        print(json.dumps({"ok": False, "reason": f"vault not found: {VAULT}"}))
+        return
+
+    gtimes, changed = git_times()
+    all_notes = []
+    for p in notes():
+        text = read(p)
+        fm, body = frontmatter(text)
+        try:
+            mtime = p.stat().st_mtime
+        except OSError:
+            continue
+        r = rel(p)
+        if r in gtimes and r not in changed:
+            mtime = gtimes[r]
+        all_notes.append({"path": p, "fm": fm, "body": body, "mtime": mtime, "text": text})
+
+    out = {"ok": True, "vault": VAULT.name}
+    by_type = lambda t: [n for n in all_notes if n["fm"].get("type") == t]
+
+    # Track: the active one touched most recently
+    tracks = sorted((n for n in by_type("track") if n["fm"].get("status") == "active"),
+                    key=lambda n: n["mtime"], reverse=True)
+    if tracks:
+        t = tracks[0]
+        ms = t["body"].split("## Milestones", 1)[-1].split("\n## ", 1)[0]
+        stage, nxt, done, total, stage_done, stage_total = None, None, 0, 0, 0, 0
+        cur_stage = None
+        for line in ms.splitlines():
+            h = re.match(r"^###\s+(.*)", line)
+            if h:
+                cur_stage = unlink(re.sub(r"\(.*?\)", "", h.group(1)))
+                continue
+            c = re.match(r"^\s*- \[( |x|X)\]\s+(.*)", line)
+            if c:
+                total += 1
+                ticked = c.group(1) != " "
+                done += ticked
+                if not ticked and nxt is None:
+                    nxt, stage = unlink(c.group(2)), cur_stage
+                if stage is not None and cur_stage == stage:
+                    stage_total += 1
+                    stage_done += ticked
+        out["track"] = {
+            "name": t["path"].stem, "file": rel(t["path"]),
+            "goal": t["fm"].get("goal") or "",
+            "stage": stage or "", "next": nxt or "",
+            "done": done, "total": total,
+            "stageDone": stage_done, "stageTotal": stage_total,
+        }
+
+    # Source: what I'm reading/watching now
+    sources = sorted((n for n in by_type("source") if n["fm"].get("status") == "reading"),
+                     key=lambda n: n["mtime"], reverse=True)
+    if sources:
+        s = sources[0]
+        aliases = s["fm"].get("aliases") or []
+        short = aliases[0] if isinstance(aliases, list) and aliases else s["path"].stem
+        nxt_mod, nxt_concepts, section = None, [], None
+        contents = s["body"].split("## Contents", 1)[-1].split("\n## ", 1)[0] if "## Contents" in s["body"] else s["body"]
+        for line in contents.splitlines():
+            sec = re.match(r"^\s*- \*\*(.+?)\*\*", line)
+            if sec:
+                section = unlink(sec.group(1))
+            c = re.match(r"^\s*- \[ \]\s+(.*)", line)
+            if c:
+                raw = c.group(1)
+                head = re.split(r"\s+(?:→|-|·)\s+\[\[", raw, maxsplit=1)[0]
+                nxt_mod = unlink(head)
+                nxt_concepts = links(raw)
+                break
+        out["source"] = {
+            "title": short, "full": s["path"].stem, "file": rel(s["path"]),
+            "kind": s["fm"].get("kind") or "",
+            "progress": unlink(s["fm"].get("progress") or "") if isinstance(s["fm"].get("progress"), str) else "",
+            "section": (section or "").split(" — ")[0],
+            "next": nxt_mod or "", "nextConcepts": nxt_concepts[:6],
+        }
+
+    # Recently worked on (not journal/maps/sources), newest first
+    def is_work(n):
+        r = rel(n["path"])
+        return not r.startswith("Journal/") and n["fm"].get("type") not in ("track", "subject", "goal", "guide")
+    recent = sorted((n for n in all_notes if is_work(n)), key=lambda n: n["mtime"], reverse=True)[:3]
+    out["recent"] = [{
+        "title": n["path"].stem, "file": rel(n["path"]),
+        "type": n["fm"].get("type") or "note",
+        "status": n["fm"].get("status") if isinstance(n["fm"].get("status"), str) else "",
+        "icon": STATUS_ICON.get(n["fm"].get("status"), ""),
+        "ago": ago(n["mtime"]),
+    } for n in recent]
+
+    # One concept to grow: the seed/growing concept left alone the longest
+    recent_files = {r["file"] for r in out["recent"]}
+    growable = sorted((n for n in by_type("concept")
+                       if n["fm"].get("status") in ("seed", "growing") and rel(n["path"]) not in recent_files),
+                      key=lambda n: n["mtime"])
+    if growable:
+        g = growable[0]
+        m = re.search(r"> \[!intuition\][^\n]*\n((?:>.*\n?)+)", g["body"])
+        hint = unlink(" ".join(l.lstrip("> ").strip() for l in m.group(1).splitlines())) if m else ""
+        out["revisit"] = {
+            "title": g["path"].stem, "file": rel(g["path"]),
+            "status": g["fm"].get("status"), "icon": STATUS_ICON.get(g["fm"].get("status"), ""),
+            "ago": ago(g["mtime"]),
+            "hint": (hint[:150] + "…") if len(hint) > 150 else hint,
+        }
+
+    # Open questions: `- [ ] text #question` with real text
+    qs = []
+    for n in all_notes:
+        for line in n["text"].splitlines():
+            m = re.match(r"^\s*- \[ \]\s+(.*#question.*)$", line)
+            if m:
+                q = unlink(m.group(1).replace("#question", ""))
+                if len(q) > 3 and "(answered" not in q.lower():
+                    qs.append((n["mtime"], q, rel(n["path"])))
+    qs.sort(reverse=True)
+    out["questions"] = {"count": len(qs), "first": {"text": qs[0][1], "file": qs[0][2]} if qs else None}
+
+    # Last study log
+    logs = sorted((n for n in all_notes if rel(n["path"]).startswith("Journal/")
+                   and re.match(r"\d{4}-\d{2}-\d{2}$", n["path"].stem)), key=lambda n: n["path"].stem, reverse=True)
+    if logs:
+        l = logs[0]
+        d = datetime.strptime(l["path"].stem, "%Y-%m-%d").date()
+        days = (TODAY - d).days
+        out["journal"] = {
+            "date": l["path"].stem, "file": rel(l["path"]),
+            "ago": "today" if days == 0 else "yesterday" if days == 1 else f"{days} days ago",
+            "summary": unlink(l["fm"].get("summary") or "") if isinstance(l["fm"].get("summary"), str) else "",
+        }
+
+    # Study days this month and the last 7 days: a day counts if any note changed or a log exists
+    active = {date.fromtimestamp(n["mtime"]) for n in all_notes}
+    active |= {datetime.strptime(l["path"].stem, "%Y-%m-%d").date() for l in logs}
+    out["monthActive"] = sorted(d.day for d in active if d.year == TODAY.year and d.month == TODAY.month)
+    week = [TODAY - timedelta(days=i) for i in range(6, -1, -1)]
+    out["week"] = [{"d": d.strftime("%a")[0], "active": d in active, "today": d == TODAY} for d in week]
+    streak = 0
+    while (TODAY - timedelta(days=streak)) in active:
+        streak += 1
+    out["streak"] = streak
+
+    # Inbox (plain vaults): unticked captures in Inbox.md
+    inbox = VAULT / "Inbox.md"
+    out["inbox"] = len(re.findall(r"^- \[ \]", read(inbox), flags=re.M)) if inbox.is_file() else 0
+
+    print(json.dumps(out, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+    try:
+        main()
+    except Exception as e:  # never break the desktop
+        print(json.dumps({"ok": False, "reason": str(e)}))
+        sys.exit(0)

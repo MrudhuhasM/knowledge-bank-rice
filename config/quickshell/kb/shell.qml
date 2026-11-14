@@ -1,13 +1,19 @@
-// Knowledge Bank: desktop widgets (Quickshell 0.3+)
+// Knowledge Bank: desktop (Quickshell 0.3+)
 // Drawn on the wallpaper, below windows. Launched by hyprland.lua: `quickshell -c kb`.
+//
+// When no window is open, the desktop shows where you left off in your learning,
+// read from the vault by kb-resume:
 //
 //   Good morning.
 //   09:41
 //   SATURDAY · 14 NOVEMBER · WEEK 46
-//   ┌ weather ┐ ┌ notebook ┐ ┌ calendar ┐
-//   └─────────┘ └──────────┘ └──────────┘
-//   ┌ highlight from your vault ────────┐
-//   └───────────────────────────────────┘
+//   ┌ where you left off ─────────────────────┐
+//   │ the module you're on, in the course     │
+//   │ next milestone on the path · last notes │
+//   │ a question waiting for you              │
+//   └─────────────────────────────────────────┘
+//
+//   (next to the clock, quiet) a small month with your study days · the weather
 
 import QtQuick
 import Quickshell
@@ -20,27 +26,26 @@ ShellRoot {
     // ── Palette: paper & ink (Rosé Pine Dawn) ─────────────────────
     readonly property color paper: "#faf4ed"
     readonly property color card:  "#fffaf3"
-    readonly property color fold:  "#f2e9e1"
     readonly property color line:  "#dfdad9"
-    readonly property color muted: "#9893a5"
-    readonly property color subtle: "#797593"
+    readonly property color muted: "#9893a5"     // decoration only
+    readonly property color subtle: "#6e6a86"    // readable grey
     readonly property color ink:   "#575279"
-    readonly property color rose:  "#d7827e"
-    readonly property color gold:  "#ea9d34"
+    readonly property color rose:  "#d7827e"     // decoration only
+    readonly property color love:  "#b4637a"
+    readonly property color pine:  "#286983"
+    readonly property color gold:  "#b0700f"
 
     readonly property string serif: "Fraunces"
     readonly property string mono:  "IBM Plex Mono"
     readonly property string sans:  "IBM Plex Sans"
     readonly property string icons: "JetBrainsMono Nerd Font"
 
-    readonly property int cell: 230
-    readonly property int gap: 16
+    readonly property int sheetWidth: 640
     readonly property string bin: "$HOME/.local/bin/"
 
     // ── Data ──────────────────────────────────────────────────────
     property var weather: ({ ok: false })
-    property var notes: ({ inbox: 0, words: 0, streak: 0, notes: 0 })
-    property string quote: ""
+    property var resume: ({ ok: false })
 
     SystemClock { id: clock; precision: SystemClock.Seconds }
 
@@ -57,24 +62,23 @@ ShellRoot {
     Timer { interval: 15 * 60 * 1000; running: true; repeat: true; onTriggered: root.run(weatherProc) }
 
     Process {
-        id: notesProc
-        command: ["sh", "-c", "exec " + root.bin + "kb-stats --raw"]
+        id: resumeProc
+        command: ["sh", "-c", "exec " + root.bin + "kb-resume"]
         running: true
         stdout: StdioCollector {
-            onStreamFinished: { try { root.notes = JSON.parse(text) } catch (e) {} }
+            onStreamFinished: { try { root.resume = JSON.parse(text) } catch (e) {} }
         }
     }
-    Timer { interval: 60 * 1000; running: true; repeat: true; onTriggered: root.run(notesProc) }
-
-    Process {
-        id: quoteProc
-        command: ["sh", "-c", "exec " + root.bin + "kb-quote --plain"]
-        running: true
-        stdout: StdioCollector { onStreamFinished: root.quote = text.trim() }
-    }
-    Timer { interval: 30 * 60 * 1000; running: true; repeat: true; onTriggered: root.run(quoteProc) }
+    Timer { interval: 2 * 60 * 1000; running: true; repeat: true; onTriggered: root.run(resumeProc) }
 
     function open(cmd) { Quickshell.execDetached(["sh", "-c", root.bin + cmd]) }
+
+    // Open a vault file (path relative to the vault) in Obsidian.
+    function openNote(file) {
+        if (!file || !root.resume.vault) return
+        Quickshell.execDetached(["xdg-open", "obsidian://open?vault=" + encodeURIComponent(root.resume.vault)
+                                 + "&file=" + encodeURIComponent(file.replace(/\.md$/, ""))])
+    }
 
     function greeting(h) {
         if (h < 5) return "Still up?"
@@ -96,305 +100,402 @@ ShellRoot {
     // Small uppercase label with a rose dot, like a page header.
     component Label: Row {
         property string text
+        property color tint: root.subtle
         spacing: 8
-        Rectangle { width: 6; height: 6; radius: 3; color: root.rose; anchors.verticalCenter: parent.verticalCenter }
+        Rectangle { width: 5; height: 5; radius: 2.5; color: root.rose; anchors.verticalCenter: parent.verticalCenter }
         Text {
             text: parent.text.toUpperCase()
-            color: root.subtle
+            color: parent.tint
             font.family: root.mono
             font.pixelSize: 11
-            font.letterSpacing: 2.4
+            font.letterSpacing: 2.2
         }
     }
 
-    // A paper card with a soft ink shadow.
-    component Card: Item {
-        id: cardRoot
-        default property alias content: inner.data
-        property string title
-        signal clicked()
-        width: root.cell
-        height: root.cell
+    // Mono caption (uppercase, wide-spaced)
+    component Caption: Text {
+        color: root.subtle
+        font.family: root.mono
+        font.pixelSize: 11
+        font.letterSpacing: 1.4
+        elide: Text.ElideRight
+    }
 
-        // soft ink shadow: two offset layers under the card
-        Rectangle { anchors.fill: bg; anchors.topMargin: 10; anchors.bottomMargin: -10; radius: 24; color: "#0d575279" }
-        Rectangle { anchors.fill: bg; anchors.topMargin: 4;  anchors.bottomMargin: -4;  radius: 23; color: "#12575279" }
-        Rectangle {
-            id: bg
+    // A block you can click to open its note; ink darkens a touch on hover.
+    component Block: Item {
+        id: blk
+        default property alias content: col.data
+        property string file
+        property alias hovered: ma.containsMouse
+        width: parent.width
+        implicitHeight: col.implicitHeight
+        Column { id: col; width: parent.width; spacing: 6 }
+        MouseArea {
+            id: ma
             anchors.fill: parent
-            radius: 22
-            color: Qt.rgba(1, 0.98, 0.953, 0.94)
-            border.color: root.line
-            border.width: 1
+            anchors.margins: -8
+            hoverEnabled: true
+            cursorShape: blk.file ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: root.openNote(blk.file)
         }
-        Label { text: cardRoot.title; x: 22; y: 20 }
-        Item { id: inner; anchors.fill: parent; anchors.margins: 22; anchors.topMargin: 48 }
-        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: cardRoot.clicked() }
     }
 
-    // ── One widget layer per screen ───────────────────────────────
+    component Rule: Rectangle { width: parent.width; height: 1; color: root.line }
+
+    // ── One desktop per screen ────────────────────────────────────
     Variants {
         model: Quickshell.screens
 
-        PanelWindow {
-            id: win
+        Scope {
+            id: scr
             required property var modelData
-            screen: modelData
             // Shrink everything on small screens (designed for ~1080p and up)
-            readonly property real s: Math.min(1, (modelData.height - 130) / 780)
+            readonly property real s: Math.min(1, (modelData.height - 120) / 860)
 
-            anchors { top: true; left: true }
-            margins { top: Math.round(92 * s); left: Math.round(72 * s) }
-            implicitWidth: Math.ceil((root.cell * 3 + root.gap * 2 + 24) * s)
-            implicitHeight: Math.ceil(780 * s)
-            color: "transparent"
-            exclusionMode: ExclusionMode.Ignore
-            focusable: false
-            WlrLayershell.layer: WlrLayer.Bottom
-            WlrLayershell.namespace: "kb-widgets"
+            // ── Top left: clock and "where you left off" ─────────
+            PanelWindow {
+                id: win
+                screen: scr.modelData
+                anchors { top: true; left: true }
+                margins { top: Math.round(84 * scr.s); left: Math.round(76 * scr.s) }
+                implicitWidth: Math.ceil((root.sheetWidth + 30) * scr.s)
+                implicitHeight: Math.ceil(main.implicitHeight * scr.s + 30)
+                color: "transparent"
+                exclusionMode: ExclusionMode.Ignore
+                focusable: false
+                WlrLayershell.layer: WlrLayer.Bottom
+                WlrLayershell.namespace: "kb-desktop"
 
-            Column {
-                spacing: 0
-                scale: win.s
-                transformOrigin: Item.TopLeft
+                Column {
+                    id: main
+                    spacing: 0
+                    scale: scr.s
+                    transformOrigin: Item.TopLeft
 
-                // Greeting
-                Text {
-                    text: root.greeting(clock.date.getHours())
-                    color: root.subtle
-                    font.family: root.serif
-                    font.italic: true
-                    font.pixelSize: 30
-                }
-
-                // Clock: HH:MM in a big serif, the colon is the one bit of colour
-                Row {
-                    spacing: 4
-                    Text {
-                        text: Qt.formatTime(clock.date, "HH")
-                        color: root.ink
-                        font.family: root.serif
-                        font.pixelSize: 168
-                        font.weight: Font.Light
-                    }
-                    Text {
-                        text: ":"
-                        color: root.rose
-                        opacity: clock.date.getSeconds() % 2 === 0 ? 1 : 0.35
-                        Behavior on opacity { NumberAnimation { duration: 400 } }
-                        font.family: root.serif
-                        font.pixelSize: 168
-                        font.weight: Font.Light
-                    }
-                    Text {
-                        text: Qt.formatTime(clock.date, "mm")
-                        color: root.ink
-                        font.family: root.serif
-                        font.pixelSize: 168
-                        font.weight: Font.Light
-                    }
-                }
-
-                // Date line
-                Text {
-                    text: (Qt.locale("en_US").toString(clock.date, "dddd · d MMMM") + " · week " + root.isoWeek(clock.date)).toUpperCase()
-                    color: root.subtle
-                    font.family: root.mono
-                    font.pixelSize: 14
-                    font.letterSpacing: 3.2
-                    bottomPadding: 34
-                }
-
-                // ── Row of cards ─────────────────────────────────
-                Row {
-                    spacing: root.gap
-                    bottomPadding: root.gap
-
-                    // Weather
-                    Card {
-                        title: root.weather.ok ? root.weather.place : "weather"
-                        onClicked: root.run(weatherProc)
-
+                    // Clock on the left; the month and weather, quietly, on the right
+                    Item {
+                        width: root.sheetWidth
+                        height: head.implicitHeight + 36
                         Column {
-                            anchors.fill: parent
-                            spacing: 2
-                            visible: root.weather.ok
+                            id: head
+                            Text {
+                                text: root.greeting(clock.date.getHours())
+                                color: root.subtle
+                                font.family: root.serif
+                                font.italic: true
+                                font.pixelSize: 26
+                            }
+
+                            // Clock: the colon is the one bit of colour
                             Row {
-                                spacing: 12
-                                Text {
-                                    text: root.weather.icon || ""
-                                    color: root.gold
-                                    font.family: root.icons
-                                    font.pixelSize: 44
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                                Text {
-                                    text: (root.weather.temp ?? "–") + "°"
-                                    color: root.ink
-                                    font.family: root.serif
-                                    font.pixelSize: 62
-                                    font.weight: Font.Light
+                                spacing: 3
+                                Repeater {
+                                    model: 3
+                                    Text {
+                                        required property int index
+                                        text: index === 0 ? Qt.formatTime(clock.date, "HH") : index === 1 ? ":" : Qt.formatTime(clock.date, "mm")
+                                        color: index === 1 ? root.rose : root.ink
+                                        opacity: index === 1 && clock.date.getSeconds() % 2 ? 0.35 : 1
+                                        Behavior on opacity { NumberAnimation { duration: 400 } }
+                                        font.family: root.serif
+                                        font.pixelSize: 136
+                                        font.weight: Font.Light
+                                    }
                                 }
                             }
+
                             Text {
+                                text: (Qt.locale("en_US").toString(clock.date, "dddd · d MMMM") + " · week " + root.isoWeek(clock.date)).toUpperCase()
+                                color: root.subtle
+                                font.family: root.mono
+                                font.pixelSize: 13
+                                font.letterSpacing: 3
+                            }
+                        }
+                        Column {
+                            id: quiet
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.topMargin: 36
+                            spacing: 14
+                            opacity: 0.9
+
+                            // Mini month: today is ink, study days carry a rose dot
+                            Column {
+                                id: cal
+                                spacing: 4
+                                readonly property int year: clock.date.getFullYear()
+                                readonly property int month: clock.date.getMonth()
+                                readonly property int today: clock.date.getDate()
+                                readonly property int lead: (new Date(year, month, 1).getDay() + 6) % 7
+                                readonly property int days: new Date(year, month + 1, 0).getDate()
+                                readonly property var active: root.resume.monthActive || []
+
+                                anchors.right: parent.right
+                                Caption { text: Qt.locale("en_US").toString(clock.date, "MMMM").toUpperCase(); font.pixelSize: 10 }
+                                Grid {
+                                    columns: 7
+                                    rowSpacing: 0
+                                    columnSpacing: 0
+                                    Repeater {
+                                        model: cal.lead + cal.days
+                                        Item {
+                                            required property int index
+                                            readonly property int day: index - cal.lead + 1
+                                            readonly property bool studied: cal.active.indexOf(day) >= 0
+                                            width: 19; height: 17
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                y: 0
+                                                text: parent.day > 0 ? parent.day : ""
+                                                color: parent.day === cal.today ? root.ink : root.subtle
+                                                font.family: root.mono
+                                                font.pixelSize: 9
+                                                font.weight: parent.day === cal.today ? Font.Bold : Font.Normal
+                                                font.underline: parent.day === cal.today
+                                            }
+                                            Rectangle {
+                                                visible: parent.studied
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                y: 13
+                                                width: 3; height: 3; radius: 1.5
+                                                color: root.rose
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Weather, quietly
+                            Column {
+                                anchors.right: parent.right
+                                spacing: 1
+                                visible: root.weather.ok === true
+                                Row {
+                                    anchors.right: parent.right
+                                    spacing: 7
+                                    Text {
+                                        text: root.weather.icon || ""
+                                        color: root.gold
+                                        font.family: root.icons
+                                        font.pixelSize: 16
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Text {
+                                        text: (root.weather.temp ?? "–") + "°"
+                                        color: root.ink
+                                        font.family: root.serif
+                                        font.pixelSize: 22
+                                        font.weight: Font.Light
+                                    }
+                                }
+                                Caption {
+                                    anchors.right: parent.right
+                                    font.pixelSize: 10
+                                    text: (root.weather.desc || "").toUpperCase()
+                                }
+                                Caption {
+                                    anchors.right: parent.right
+                                    font.pixelSize: 10
+                                    text: ((root.weather.place || "") + " · H " + (root.weather.high ?? "–") + "° L " + (root.weather.low ?? "–") + "°").toUpperCase()
+                                }
+                            }
+                        }
+                        MouseArea { anchors.fill: quiet; onClicked: root.run(weatherProc) }
+                    }
+
+                    // ── The sheet ──────────────────────────────────
+                    Item {
+                        id: sheet
+                        visible: root.resume.ok === true
+                        width: root.sheetWidth
+                        height: visible ? body.implicitHeight + 56 : 0
+                        readonly property var r: root.resume
+                        readonly property var src: r.source || null
+                        readonly property var trk: r.track || null
+                        readonly property var rec: r.recent || []
+                        readonly property var q: (r.questions && r.questions.first) || null
+                        readonly property var grow: r.revisit || null
+
+                        // soft ink shadow, then paper
+                        Rectangle { anchors.fill: bg; anchors.topMargin: 10; anchors.bottomMargin: -10; radius: 24; color: "#0b575279" }
+                        Rectangle { anchors.fill: bg; anchors.topMargin: 3;  anchors.bottomMargin: -3;  radius: 23; color: "#10575279" }
+                        Rectangle {
+                            id: bg
+                            anchors.fill: parent
+                            radius: 22
+                            color: Qt.rgba(1, 0.98, 0.953, 0.93)
+                            border.color: root.line
+                        }
+                        // a rose margin line, like a notebook page
+                        Rectangle { x: 18; y: 24; width: 1.5; height: parent.height - 48; color: root.rose; opacity: 0.45 }
+
+                        Column {
+                            id: body
+                            x: 40; y: 26
+                            width: parent.width - 72
+                            spacing: 20
+
+                            // header
+                            Item {
+                                width: parent.width; height: 16
+                                Label { text: "where you left off" }
+                                Caption {
+                                    anchors.right: parent.right
+                                    visible: sheet.rec.length > 0
+                                    text: sheet.rec.length ? ("last here " + sheet.rec[0].ago).toUpperCase() : ""
+                                }
+                            }
+
+                            // 1 · the source and the module you're on
+                            Block {
+                                visible: sheet.src !== null
+                                file: sheet.src ? sheet.src.file : ""
+                                Caption {
+                                    width: parent.width
+                                    text: sheet.src ? (["continue", sheet.src.title, sheet.src.section].filter(x => x).join("  ·  ")).toUpperCase() : ""
+                                }
+                                Text {
+                                    width: parent.width
+                                    text: sheet.src ? (sheet.src.next || sheet.src.progress || sheet.src.full) : ""
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                    color: root.ink
+                                    font.family: root.serif
+                                    font.pixelSize: 30
+                                    font.weight: Font.Normal
+                                    lineHeight: 1.05
+                                }
+                                Text {
+                                    width: parent.width
+                                    visible: text.length > 0
+                                    text: sheet.src && sheet.src.nextConcepts.length ? sheet.src.nextConcepts.join("  ·  ") : ""
+                                    elide: Text.ElideRight
+                                    color: root.pine
+                                    font.family: root.sans
+                                    font.pixelSize: 14
+                                }
+                            }
+
+                            Rule { visible: sheet.src !== null && (sheet.trk !== null || sheet.rec.length > 0) }
+
+                            // 2 · next on the path | last touched
+                            Row {
                                 width: parent.width
-                                text: (root.weather.desc || "").toUpperCase()
-                                elide: Text.ElideRight
-                                color: root.subtle
-                                font.family: root.mono
-                                font.pixelSize: 11
-                                font.letterSpacing: 1.6
-                            }
-                            Item { width: 1; height: 10 }
-                            Text {
-                                text: "H " + (root.weather.high ?? "–") + "°   L " + (root.weather.low ?? "–") + "°   feels " + (root.weather.feels ?? "–") + "°"
-                                color: root.subtle
-                                font.family: root.mono
-                                font.pixelSize: 11
-                            }
-                        }
-                        Text {
-                            visible: !root.weather.ok
-                            anchors.fill: parent
-                            wrapMode: Text.WordWrap
-                            text: "No weather yet.\nClick to retry."
-                            color: root.subtle
-                            font.family: root.sans
-                            font.pixelSize: 13
-                        }
-                    }
+                                spacing: 28
+                                visible: sheet.trk !== null || sheet.rec.length > 0
 
-                    // Notebook
-                    Card {
-                        title: "notebook"
-                        onClicked: root.open("kb-daily")
+                                Block {
+                                    width: sheet.rec.length ? (parent.width - 28) * 0.55 : parent.width
+                                    visible: sheet.trk !== null
+                                    file: sheet.trk ? sheet.trk.file : ""
+                                    Caption { width: parent.width; text: "NEXT ON THE PATH" }
+                                    Text {
+                                        width: parent.width
+                                        text: sheet.trk ? sheet.trk.next : ""
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 2
+                                        elide: Text.ElideRight
+                                        color: root.ink
+                                        font.family: root.serif
+                                        font.pixelSize: 18
+                                    }
+                                    // stage progress as small dots
+                                    Row {
+                                        spacing: 8
+                                        Row {
+                                            spacing: 4
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            Repeater {
+                                                model: sheet.trk ? sheet.trk.stageTotal : 0
+                                                Rectangle {
+                                                    required property int index
+                                                    width: 7; height: 7; radius: 3.5
+                                                    color: index < sheet.trk.stageDone ? root.rose : "transparent"
+                                                    border.color: root.muted
+                                                    border.width: index < sheet.trk.stageDone ? 0 : 1
+                                                }
+                                            }
+                                        }
+                                        Caption {
+                                            text: sheet.trk ? ("stage " + sheet.trk.stage).toUpperCase() : ""
+                                        }
+                                    }
+                                }
 
-                        Column {
-                            anchors.fill: parent
-                            spacing: 4
-                            Row {
-                                spacing: 10
-                                Text {
-                                    text: root.notes.inbox ?? 0
-                                    color: root.ink
-                                    font.family: root.serif
-                                    font.pixelSize: 62
-                                    font.weight: Font.Light
+                                Column {
+                                    width: sheet.trk ? (parent.width - 28) * 0.45 : parent.width
+                                    visible: sheet.rec.length > 0
+                                    spacing: 6
+                                    Caption { text: "LAST TOUCHED" }
+                                    Repeater {
+                                        model: Math.min(3, sheet.rec.length)
+                                        Item {
+                                            id: recRow
+                                            required property int index
+                                            readonly property var n: sheet.rec[index]
+                                            width: parent.width; height: 22
+                                            Text {
+                                                width: parent.width - 4
+                                                text: (recRow.n.icon ? recRow.n.icon + " " : "") + recRow.n.title
+                                                elide: Text.ElideRight
+                                                color: recRow.index === 0 ? root.ink : root.subtle
+                                                font.family: root.sans
+                                                font.pixelSize: 14
+                                                font.weight: recRow.index === 0 ? Font.Medium : Font.Normal
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.openNote(recRow.n.file)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rule { visible: sheet.q !== null || sheet.grow !== null }
+
+                            // 3 · a question waiting (or a seed to grow)
+                            Block {
+                                visible: sheet.q !== null || sheet.grow !== null
+                                file: sheet.q ? sheet.q.file : (sheet.grow ? sheet.grow.file : "")
+                                Item {
+                                    width: parent.width; height: 14
+                                    Caption { text: sheet.q ? "A QUESTION WAITING" : "A SEED TO GROW" }
+                                    Caption {
+                                        anchors.right: parent.right
+                                        visible: sheet.q !== null && root.resume.questions.count > 1
+                                        text: sheet.q ? (root.resume.questions.count - 1) + " MORE OPEN" : ""
+                                    }
                                 }
                                 Text {
-                                    text: "in\ninbox"
-                                    color: root.subtle
+                                    width: parent.width
+                                    text: sheet.q ? sheet.q.text : (sheet.grow ? sheet.grow.icon + " " + sheet.grow.title + (sheet.grow.hint ? " — " + sheet.grow.hint : "") : "")
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                    color: root.love
                                     font.family: root.serif
                                     font.italic: true
-                                    font.pixelSize: 15
-                                    lineHeight: 0.9
-                                    anchors.bottom: parent.bottom
-                                    anchors.bottomMargin: 14
-                                }
-                            }
-                            Repeater {
-                                model: 3
-                                Item {
-                                    id: stat
-                                    required property int index
-                                    readonly property var row: [
-                                        ["words today", root.notes.words ?? 0],
-                                        ["streak",      (root.notes.streak ?? 0) + " d"],
-                                        ["notes",       root.notes.notes ?? 0]
-                                    ][index]
-                                    width: 186
-                                    height: 20
-                                    Text {
-                                        text: stat.row[0].toUpperCase()
-                                        color: root.subtle
-                                        font.family: root.mono
-                                        font.pixelSize: 11
-                                        font.letterSpacing: 1.4
-                                    }
-                                    Text {
-                                        anchors.right: parent.right
-                                        text: stat.row[1]
-                                        color: root.ink
-                                        font.family: root.mono
-                                        font.pixelSize: 12
-                                        font.weight: Font.Medium
-                                    }
+                                    font.pixelSize: 19
+                                    lineHeight: 1.1
                                 }
                             }
                         }
                     }
 
-                    // Calendar
-                    Card {
-                        id: cal
-                        title: Qt.locale("en_US").toString(clock.date, "MMMM yyyy")
-                        readonly property int year: clock.date.getFullYear()
-                        readonly property int month: clock.date.getMonth()
-                        readonly property int today: clock.date.getDate()
-                        // Monday-first offset of the 1st and number of days
-                        readonly property int lead: (new Date(year, month, 1).getDay() + 6) % 7
-                        readonly property int days: new Date(year, month + 1, 0).getDate()
-
-                        Grid {
-                            anchors.fill: parent
-                            columns: 7
-                            rowSpacing: 1
-                            columnSpacing: 0
-                            Repeater {
-                                model: 7
-                                Text {
-                                    required property int index
-                                    width: 26.5; height: 18
-                                    horizontalAlignment: Text.AlignHCenter
-                                    text: "MTWTFSS"[index]
-                                    color: "#b4637a"
-                                    font.family: root.mono
-                                    font.pixelSize: 10
-                                }
-                            }
-                            Repeater {
-                                model: cal.lead + cal.days
-                                Item {
-                                    required property int index
-                                    readonly property int day: index - cal.lead + 1
-                                    width: 26.5; height: 21
-                                    Rectangle {
-                                        anchors.centerIn: parent
-                                        width: 21; height: 21; radius: 10.5
-                                        color: root.ink
-                                        visible: parent.day === cal.today
-                                    }
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: parent.day > 0 ? parent.day : ""
-                                        color: parent.day === cal.today ? root.card : root.ink
-                                        font.family: root.mono
-                                        font.pixelSize: 11
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Highlight from the vault
-                Card {
-                    title: "from your notes"
-                    width: root.cell * 3 + root.gap * 2
-                    height: 132
-                    onClicked: root.run(quoteProc)
-
+                    // Nothing to resume yet (a new vault)
                     Text {
-                        anchors.fill: parent
-                        text: root.quote.length ? "“" + root.quote + "”" : "Mark a line with > in any note and it will surface here."
-                        wrapMode: Text.WordWrap
-                        maximumLineCount: 3
-                        elide: Text.ElideRight
-                        color: root.ink
+                        visible: root.resume.ok !== true
+                        width: root.sheetWidth
+                        text: "Your notes will meet you here.\nSuper + K, then C to capture the first thought."
+                        color: root.subtle
                         font.family: root.serif
                         font.italic: true
-                        font.pixelSize: 21
-                        lineHeight: 1.15
+                        font.pixelSize: 20
+                        lineHeight: 1.2
                     }
                 }
             }

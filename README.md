@@ -6,7 +6,7 @@ paper-like place to write, keep, read and review notes.
 ![Desktop preview](screenshots/desktop-preview.jpg)
 
 - **Look:** warm cream paper, ink text, one rose accent (Rosé Pine Dawn). Fraunces serif for clocks and headings, IBM Plex Mono for small uppercase labels, a halftone-orb wallpaper on textured paper.
-- **Desktop widgets (Quickshell):** a big serif clock with greeting, date and week number, plus paper cards for **weather**, your **notebook** (inbox, words today, streak), a **calendar** and a **highlight from your notes**. They sit on the wallpaper, under your windows.
+- **A desktop that remembers where you were (Quickshell):** with no windows open you see a serif clock and one paper sheet, **where you left off**: the module you're on in the course you're reading, the next milestone on your learning path, the notes you touched last, and one open question waiting for you. Click any of them to open that note in Obsidian. A small month (rose dots on study days) and the weather sit quietly beside the clock.
 - **Desktop:** Hyprland (Lua config), floating-island **waybar**, **rofi** launcher, **mako** notifications, **hyprlock** lock screen that shows one of your own highlights, **hypridle**, **kitty** + **starship**.
 - **Readable everywhere:** one paper & ink palette applied to GTK 3/4 apps, Qt and KDE apps (qt6ct + KDE colour scheme), the terminal's 16 colours, fish, fzf, bat and Obsidian. Every text colour is at least 3.7:1 contrast on paper.
 - **Notes:** **Obsidian** and **Neovim (`kv`)** on the same Markdown vault, **zathura** for PDFs, and Super+K keys for capture, daily notes, search, review, screenshots-to-vault and focus mode.
@@ -97,11 +97,23 @@ Obsidian opens on workspace 1 (Write), PDFs on 2 (Read), browsers on 3 (Web).
 
 Lines starting with `> ` (highlights) appear on the lock screen at random.
 
-## Widgets
+## The desktop
 
-- **Weather** comes from [wttr.in](https://wttr.in). Set your city in `~/.config/kb/config`: `KB_WEATHER_LOCATION="Kochi"` (empty = guess from your IP) and `KB_WEATHER_UNITS="c"` or `"f"`. Click the card to refresh.
-- **Notebook** click opens today's note. **Highlight** click shows another one. Any line starting with `> ` in your notes can appear.
-- Restart the widgets after changing settings: `pkill quickshell; quickshell -c kb &`
+**Where you left off** is read from your vault by `kb-resume` every two minutes (it only reads, never writes). It understands these conventions, and simply leaves out what your vault doesn't have:
+
+| Shows | Comes from |
+| --- | --- |
+| Continue … the next module | the newest note with `type: source` and `status: reading`: its first unticked `- [ ]` line under `## Contents`, plus the `[[concepts]]` linked on that line |
+| Next on the path | the newest note with `type: track` and `status: active`: its first unticked milestone under `## Milestones` and the `### stage` it sits in (dots = stage progress) |
+| Last touched | the three notes you changed most recently (from git history when the vault is a git repo); 🌱 🌿 🌳 for `status: seed / growing / solid` |
+| A question waiting | the newest `- [ ] … #question` that isn't marked "(answered …)"; otherwise the oldest seed concept to grow |
+| Study days in the month | days on which any note changed or a `Journal/YYYY-MM-DD` log exists |
+
+Using an existing vault: point `VAULT=` in `~/.config/kb/config` at it (for example a git clone of your notes) and Obsidian should have it open under the same folder name. Run `kb-resume` in a terminal to see what it finds.
+
+- **Weather** comes from [wttr.in](https://wttr.in). Set your city in `~/.config/kb/config`: `KB_WEATHER_LOCATION="Kochi"` (empty = guess from your IP) and `KB_WEATHER_UNITS="c"` or `"f"`. Click it to refresh.
+- The lock screen still shows a random highlight: any line starting with `> ` in your notes.
+- Restart the desktop after changing settings: `pkill quickshell; quickshell -c kb &`
 - Edit them in `~/.config/quickshell/kb/shell.qml`. Quickshell reloads live as you save.
 
 ## Customising

@@ -44,7 +44,7 @@ hl.monitor({
 hl.on("hyprland.start", function()
     hl.exec_cmd("swaybg -m fill -i " .. home .. "/.local/share/kb/wallpaper.png")
     hl.exec_cmd("waybar")
-    hl.exec_cmd("quickshell -c kb") -- desktop widgets: clock, weather, notebook, calendar, highlight
+    hl.exec_cmd("quickshell -c kb") -- desktop: clock, "where you left off", quiet month + weather
     hl.exec_cmd("mako")
     hl.exec_cmd("hypridle")
     hl.exec_cmd("systemctl --user start hyprpolkitagent")

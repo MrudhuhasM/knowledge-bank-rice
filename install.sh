@@ -32,7 +32,7 @@ PKGS=(
   waybar mako swaybg kitty starship quickshell qt6ct
   # utilities
   cliphist wl-clipboard grim slurp brightnessctl playerctl pavucontrol network-manager-applet
-  libnotify jq ripgrep fzf bat git xdg-utils curl fontconfig
+  libnotify jq ripgrep fzf bat git xdg-utils curl fontconfig python
   # knowledge bank
   obsidian neovim zathura zathura-pdf-mupdf
   # look
