@@ -7,11 +7,11 @@
 //   Good morning.
 //   09:41
 //   SATURDAY · 14 NOVEMBER · WEEK 46
-//   ┌ the bench ─────────────────── PHASE 0 · WORKBENCH ┐
+//   ┌ the bench ──────────────── CHAPTER 0 · THE WORKBENCH ┐
 //   │ NOW · 0.3                                          │
 //   │ Batched generation with padding                    │
-//   │ 42m on this step · 18m since your last break       │
-//   │ ●●○○○○○○  2 of 8 steps     today 1h 20m · 7 days … │
+//   │ 42m on this section · 18m since your last break    │
+//   │ ●●○○○  2 of 5 sections     today 1h 20m · 7 days … │
 //   └────────────────────────────────────────────────────┘
 //
 //   (next to the clock, quiet) a small month with your work days · the weather
@@ -326,7 +326,7 @@ ShellRoot {
                                 Caption {
                                     anchors.right: parent.right
                                     visible: sheet.ph !== null
-                                    text: sheet.ph ? ("phase " + sheet.ph.id + " · " + sheet.ph.name).toUpperCase() : ""
+                                    text: sheet.ph ? ("chapter " + sheet.ph.id + " · " + sheet.ph.name).toUpperCase() : ""
                                     width: Math.min(implicitWidth, parent.width - 140)
                                 }
                             }
@@ -342,7 +342,7 @@ ShellRoot {
                                 }
                                 Text {
                                     width: parent.width
-                                    text: sheet.step ? sheet.step.name : sheet.nxt ? sheet.nxt.name : "Paste the next phase’s steps into the time log."
+                                    text: sheet.step ? sheet.step.name : sheet.nxt ? sheet.nxt.name : "Import the next chapter’s sections into the time log."
                                     wrapMode: Text.WordWrap
                                     maximumLineCount: 2
                                     elide: Text.ElideRight
@@ -362,7 +362,7 @@ ShellRoot {
                                     text: sheet.over ? "Break’s over — " + root.dur(sheet.brk.overMs) + " past the plan. Back to work."
                                         : sheet.brk ? (sheet.brk.planMs ? "Break · " + root.dur(sheet.brk.leftMs) + " left" : "Break · " + root.dur(sheet.brk.sinceMs) + " so far")
                                         : sheet.r.due ? root.dur(sheet.r.sinceBreakMs) + " without a break. Stand up for " + sheet.r.restMin + " minutes."
-                                        : sheet.step ? root.dur(sheet.step.workMs) + " on this step · " + root.dur(sheet.r.sinceBreakMs) + " since your last break"
+                                        : sheet.step ? root.dur(sheet.step.workMs) + " on this section · " + root.dur(sheet.r.sinceBreakMs) + " since your last break"
                                         : ""
                                 }
                             }
@@ -377,7 +377,7 @@ ShellRoot {
                                     id: prog
                                     spacing: 8
                                     visible: sheet.ph !== null
-                                    Caption { text: "PHASE PROGRESS" }
+                                    Caption { text: "CHAPTER PROGRESS" }
                                     Row {
                                         spacing: 10
                                         Row {
@@ -394,7 +394,7 @@ ShellRoot {
                                                 }
                                             }
                                         }
-                                        Caption { text: sheet.ph ? (sheet.ph.done + " of " + sheet.ph.total + " steps").toUpperCase() : "" }
+                                        Caption { text: sheet.ph ? (sheet.ph.done + " of " + sheet.ph.total + " sections").toUpperCase() : "" }
                                     }
                                 }
                                 Row {
@@ -430,7 +430,7 @@ ShellRoot {
                     Text {
                         visible: !sheet.live
                         width: root.sheetWidth
-                        text: root.rl.ok === true ? "The bench is ready.\nSuper + K opens the time log; start your first step there."
+                        text: root.rl.ok === true ? "The bench is ready.\nSuper + K opens the time log; start your first section there."
                                                   : "The time log isn’t running.\nsystemctl --user start rl-timelog"
                         color: root.subtle
                         font.family: root.serif

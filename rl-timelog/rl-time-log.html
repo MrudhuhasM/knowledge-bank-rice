@@ -62,6 +62,9 @@ input.min{width:5.5em}
 .warn{color:var(--red);font-weight:500}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px 48px}
 .cols h3:not(:first-child){margin-top:24px}
+.why{color:var(--grey);font-size:13.5px;line-height:1.4;margin-top:3px;max-width:62ch}
+.whyb{color:var(--grey);font-size:15px;line-height:1.45;margin-top:8px;max-width:64ch}
+.q{font-family:var(--serif);font-style:italic;font-size:17px;color:var(--grey);margin:4px 0 8px}
 .nudge{margin-top:16px;padding:16px 20px;border:1px solid var(--rose);border-radius:16px;background:var(--live);font-family:var(--serif);font-size:19px}
 .nudge .btns{margin-top:10px;font-family:var(--sans)}
 select{min-height:40px;padding:0 8px}
@@ -82,15 +85,21 @@ code{font-family:var(--mono);font-size:13px;overflow-wrap:anywhere}
 <script>{
 const LS='rl-timelog-local-v1',LSB='rl-timelog-beat',MIN=6e4,HR=36e5,DAY=864e5;
 const SEED={rev:0,active:null,brk:null,lastBackup:null,settings:{work:50,rest:10},phases:[
- {id:'0',name:'Workbench',steps:[
-  {id:'0.1',name:'Repo scaffold and test harness',pre:true},{id:'0.2',name:'Load the policy',pre:true},
-  {id:'0.3',name:'Batched generation with padding'},{id:'0.4',name:'Per-token logprobs (gate 1)'},
-  {id:'0.5',name:'Seeding and determinism (gate 2)'},{id:'0.6',name:'Run logger'},
-  {id:'0.7',name:'Checkpoint and resume (gate 3)'},{id:'0.8',name:'Gate run and tag'}]},
- {id:'1',name:'Thin slice: the whole loop, crude',steps:[]},{id:'2',name:'RL foundations in depth',steps:[]},
- {id:'3',name:'Post-training methods',steps:[]},{id:'4',name:'Rewards, verifiers and evals',steps:[]},
- {id:'5',name:'Environments and agentic RL',steps:[]},{id:'6',name:'RL systems at scale',steps:[]},
- {id:'7',name:'GPU performance',steps:[]},{id:'8',name:'Capstone: RL-trained kernel-optimising agent',steps:[]}]};
+ {id:'0',name:'The Workbench: before anything learns',question:'What must be in place before a model can learn from a reward?',steps:[
+  {id:'0.1',name:'Repo scaffold and test harness',why:'Every later chapter imports this shared core, and an RL result is only worth trusting if the code under it is tested.'},
+  {id:'0.2',name:'Load the policy',why:'In RL the model is the policy: given the prompt and the tokens so far it chooses the next token. Pinning model, dtype and prompt format makes rollouts comparable; stop tokens define where an episode ends.'},
+  {id:'0.3',name:'Batched generation with padding (gate: batched generation)',why:'RL learns from the policy’s own samples (rollouts), and GRPO needs a group per prompt, so they are generated in batches; the completion mask marks the only tokens the loss will touch.'},
+  {id:'0.4',name:'Per-token logprobs (gate: logprobs)',why:'Every policy-gradient loss is built on log πθ(token | context); the trainer must recompute exactly what the sampler saw, and any gap is the training–inference mismatch.'},
+  {id:'0.5',name:'Gate run and tag',why:'Proves the workbench is trustworthy before Chapter 1 builds the first full RL loop on top of it.'}]},
+ {id:'1',name:'The Whole Loop, Crudely: your first model that learns from reward',steps:[]},
+ {id:'2',name:'Why the Loop Works: RL foundations',steps:[]},
+ {id:'3',name:'The Post-Training Toolbox: from base model to assistant and reasoner',steps:[]},
+ {id:'4',name:'Rewards Beyond Programs, and Whether to Trust Them',steps:[]},
+ {id:'5',name:'Worlds for Agents: environments and agentic RL',steps:[]},
+ {id:'6',name:'Making It Fast: GPU performance',steps:[]},
+ {id:'7',name:'Async RL on One Machine',steps:[]},
+ {id:'8',name:'Scaling Through a Framework',steps:[]},
+ {id:'9',name:'The Kernel Agent: everything together',steps:[]}]};
 let S=null,mode='browser',diskOk=true,ed=null,rec=null,needArm=false,wasOver=false,wasDue=false,snooze=0,nextChime=0,lastBeat=null;
 const root=document.getElementById('root');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -181,24 +190,28 @@ function restore(txt){let o;try{o=JSON.parse(txt);}catch(e){return toast('That f
   disarm();const r=S.rev||0;S=o;S.rev=Math.max(r,o.rev||0);S.settings=S.settings||{work:50,rest:10};
   if(typeof S.brk==='number')S.brk={s:S.brk,plan:0,step:S.active};save();toast('Backup restored');}
 
-/* ---------- step import: "Phase 1 — name" lines and "1.3 Step name" lines ---------- */
+/* ---------- section import: "Chapter 1 — name", "question: …", "1.3 Section name", "why: …" ---------- */
 function importSteps(txt,from){
   const t=txt.trim();if(!t)return toast(from?'No step lines in '+from:'Nothing to add');
   if(t[0]==='{')return restore(t);
-  let ph=null,added=0,renamed=0,seen=0;
+  let ph=null,last=null,added=0,renamed=0,seen=0;
   const ensure=id=>{let p=S.phases.find(x=>x.id===id);if(!p){p={id,name:'',steps:[]};S.phases.push(p);S.phases.sort((a,b)=>+a.id-+b.id);}return p;};
-  const put=(p,id,name)=>{seen++;const ex=p.steps.find(s=>s.id===id);if(ex){if(ex.name!==name){ex.name=name;renamed++;}}else{p.steps.push({id,name,breaks:[]});added++;}
+  const put=(p,id,name)=>{seen++;let ex=p.steps.find(s=>s.id===id);if(ex){if(ex.name!==name){ex.name=name;renamed++;}}else{ex={id,name,breaks:[]};p.steps.push(ex);added++;}last=ex;
     p.steps.sort((a,b)=>+a.id.split('.')[1]-+b.id.split('.')[1]);};
   for(const raw of t.split(/\r?\n/)){const line=raw.replace(/^[\s\-*•]+|\s+$/g,'').replace(/^\[[ x]\]\s*/i,'');if(!line)continue;
-    let m=line.match(/^phase\s+(\d+)\s*(?:[—–:\-]+\s*(.*))?$/i);
-    if(m){ph=ensure(m[1]);if(m[2]&&!ph.name)ph.name=m[2];continue;}
+    let m=line.match(/^(?:chapter|phase)\s+(\d+)\s*(?:[—–:\-]+\s*(.*))?$/i);
+    if(m){ph=ensure(m[1]);last=null;if(m[2]&&ph.name!==m[2]){if(ph.name)renamed++;ph.name=m[2];}continue;}
+    m=line.match(/^why:\s*(.+)$/i);
+    if(m){if(last&&last.why!==m[1]){last.why=m[1];renamed++;}continue;}
+    m=line.match(/^question:\s*(.+)$/i);
+    if(m){if(ph&&ph.question!==m[1]){ph.question=m[1];renamed++;}continue;}
     m=line.match(/^(\d+)\.(\d+)[.):]?\s+(.+)$/);
     if(m){put(ensure(m[1]),m[1]+'.'+m[2],m[3].trim());continue;}
     m=line.match(/^(\d+)[.)]\s+(.+)$/);
     if(m&&ph)put(ph,ph.id+'.'+m[1],m[2].trim());}
-  if(!seen)return toast('No steps found. Use lines like “1.1 Step name”.');
+  if(!seen)return toast('No sections found. Use lines like “1.1 Section name”.');
   if(!added&&!renamed)return toast((from?from+': ':'')+'already up to date');
-  save();toast((from?from+': ':'')+added+' steps added'+(renamed?', '+renamed+' renamed':''));
+  save();toast((from?from+': ':'')+added+' sections added'+(renamed?', '+renamed+' updated':''));
 }
 
 /* ---------- render ---------- */
@@ -209,19 +222,19 @@ function boardHTML(t){
   if(S.brk){const b=S.brk,end=b.plan?b.s+b.plan:null,left=end?end-t:null,over=end&&left<=0;
     const stateTxt=over?`Break’s over — ${dur(-left)} past the ${dur(b.plan)} you planned`:end?`On a ${dur(b.plan)} break · back at ${hm(end)}`:`On a break since ${hm(b.s)}`;
     const back=cur?`<button class="${over?'red':'pri'}" data-a="resume">Back to work</button>`:next?`<button class="${over?'red':'pri'}" data-a="startnext">Start ${esc(next.id)}</button><button class="small" data-a="endidle">End break</button>`:`<button class="${over?'red':'pri'}" data-a="endidle">End break</button>`;
-    return `<section class="now ${over?'over':'brk'}" aria-live="polite"><div class="big clock" id="clock">${over?'+'+clock(-left):end?clock(left):clock(t-b.s)}</div><div><div class="state"><span class="dot">●</span> ${stateTxt}</div><div class="what">${cur?esc(cur.id)+' — '+esc(cur.name)+' (paused)':'Between steps'}</div>${needArm&&end?'<div class="warn">Click anywhere on the page so the alarm can sound.</div>':''}</div></section><div class="btns">${back}${cur?`<button class="small" data-a="done">Done, tick ${esc(cur.id)}</button>`:''}</div>`;}
+    return `<section class="now ${over?'over':'brk'}" aria-live="polite"><div class="big clock" id="clock">${over?'+'+clock(-left):end?clock(left):clock(t-b.s)}</div><div><div class="state"><span class="dot">●</span> ${stateTxt}</div><div class="what">${cur?esc(cur.id)+' — '+esc(cur.name)+' (paused)':'Between sections'}</div>${needArm&&end?'<div class="warn">Click anywhere on the page so the alarm can sound.</div>':''}</div></section><div class="btns">${back}${cur?`<button class="small" data-a="done">Done, tick ${esc(cur.id)}</button>`:''}</div>`;}
   if(cur){const c=contWork(t),r=S.settings.rest;
-    return `<section class="now run" aria-live="polite"><div class="big clock" id="clock">${clock(work(cur,t))}</div><div><div class="state"><span class="dot">●</span> Working since ${hm(cur.start)}${nBrk(cur,t)?' · '+nBrk(cur,t)+(nBrk(cur,t)===1?' break, ':' breaks, ')+dur(brkMs(cur,t))+' so far':''}${c>=2*MIN?' · '+dur(c)+' since your last break':''}</div><div class="what">${esc(cur.id)} — ${esc(cur.name)}</div></div></section>
+    return `<section class="now run" aria-live="polite"><div class="big clock" id="clock">${clock(work(cur,t))}</div><div><div class="state"><span class="dot">●</span> Working since ${hm(cur.start)}${nBrk(cur,t)?' · '+nBrk(cur,t)+(nBrk(cur,t)===1?' break, ':' breaks, ')+dur(brkMs(cur,t))+' so far':''}${c>=2*MIN?' · '+dur(c)+' since your last break':''}</div><div class="what">${esc(cur.id)} — ${esc(cur.name)}</div>${cur.why?`<div class="whyb">${esc(cur.why)}</div>`:''}</div></section>
     ${due(t)?`<div class="nudge"><b>${dur(c)} without a break.</b> Time for a ${r} min break: stand up, look away from the screen.<div class="btns"><button class="red" data-a="brk" data-m="${r}">Take a ${r} min break</button><button class="small" data-a="snooze">Remind me in 10 min</button></div></div>`:''}
     <div class="btns"><button class="red" data-a="done">Done, tick ${esc(cur.id)}</button><span class="sep"></span>${breakBtns()}<span class="sep"></span><button class="small" data-a="cancel">Undo start</button></div>`;}
-  return `<section class="now"><div class="big clock">0:00:00</div><div><div class="state">Nothing running</div><div class="what">${next?'Next: '+esc(next.id)+' — '+esc(next.name):'No steps waiting. Paste the next phase’s steps below.'}</div></div></section><div class="btns">${next?`<button class="pri" data-a="start" data-id="${esc(next.id)}">Start ${esc(next.id)}</button><span class="sep"></span>`:''}${breakBtns()}</div>`;
+  return `<section class="now"><div class="big clock">0:00:00</div><div><div class="state">Nothing running</div><div class="what">${next?'Next: '+esc(next.id)+' — '+esc(next.name)+(next.why?`</div><div class="whyb">${esc(next.why)}`:''):'No sections waiting. Import the next chapter’s sections below.'}</div></div></section><div class="btns">${next?`<button class="pri" data-a="start" data-id="${esc(next.id)}">Start ${esc(next.id)}</button><span class="sep"></span>`:''}${breakBtns()}</div>`;
 }
 function render(){
   if(!S)return;
   const t=now(),st=stats(t);
   const unwritten=S.phases.filter(p=>!p.steps.length).length,P=st.proj;
-  const proj=P?`<p class="proj"><b>At your pace so far</b> (${dur(st.pace)} of work per calendar day, a typical step taking ${dur(st.med)}), the ${P.rem} steps written so far need about ${dur(P.remWork)} more: roughly ${Math.max(1,Math.ceil(P.days))} days, so around ${dlabel(t+P.days*DAY)}.</p><p class="note">${unwritten} phases have no steps yet, so they aren’t in this estimate. It gets sharper with every step you tick.</p>`
-    :`<p class="note">A finish estimate appears once you’ve ticked two timed steps.</p>`;
+  const proj=P?`<p class="proj"><b>At your pace so far</b> (${dur(st.pace)} of work per calendar day, a typical section taking ${dur(st.med)}), the ${P.rem} sections written so far need about ${dur(P.remWork)} more: roughly ${Math.max(1,Math.ceil(P.days))} days, so around ${dlabel(t+P.days*DAY)}.</p><p class="note">${unwritten} chapters have no sections yet, so they aren’t in this estimate. It gets sharper with every section you tick.</p>`
+    :`<p class="note">A finish estimate appears once you’ve ticked two timed sections.</p>`;
   const days=[];for(let i=13;i>=0;i--){const d=t-i*DAY;days.push({l:dlabel(d),v:st.day[dkey(d)]||0,today:!i});}
   const mx=Math.max(4*HR,...days.map(d=>d.v));
   const dayRows=days.map(d=>`<div class="row${d.today?' today':''}"><span class="lbl">${d.l}</span><div class="bar"><i style="width:${(d.v/mx*100).toFixed(1)}%"></i></div><span class="v">${d.v?dur(d.v):'–'}</span></div>`).join('');
@@ -233,25 +246,26 @@ function render(){
       let a=fresh?`<button class="small" data-a="start" data-id="${esc(s.id)}"${S.active?' disabled':''}>Start</button> `:live?`<button class="small red" data-a="done">Done</button> `:'';
       a+=`<button class="small" data-a="edit" data-id="${esc(s.id)}">Edit</button>`;
       if(fresh)a+=` <button class="small" data-a="del" data-id="${esc(s.id)}">Delete</button>`;
-      return `<tr class="${live?'live':''}"><td class="id" data-l="Step">${esc(s.id)}</td><td data-l="Name">${esc(s.name)}</td><td data-l="Status">${status}</td><td class="n" data-l="Started">${when(s.start)}</td><td class="n" data-l="Finished">${when(s.end)}</td><td class="n" data-l="Work">${s.start?dur(work(s,t)):''}</td><td class="n" data-l="Breaks">${s.start&&nBrk(s,t)?nBrk(s,t)+' · '+dur(brkMs(s,t)):''}</td><td class="act" data-l=" ">${a}</td></tr>`;}).join('');
-    return `<details${p===firstOpen?' open':''}><summary>Phase ${esc(p.id)}${p.name?' — '+esc(p.name):''}<span class="meta">${tot?dn+' of '+tot+' steps done':'steps not written yet'}${w?' · '+dur(w)+' of work':''}</span></summary>
-    ${tot?`<table class="stack"><thead><tr><th>Step</th><th>Name</th><th>Status</th><th class="n">Started</th><th class="n">Finished</th><th class="n">Work</th><th class="n">Breaks</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:''}
-    <div class="add"><input id="add-${esc(p.id)}" data-p="${esc(p.id)}" placeholder="Add one step to Phase ${esc(p.id)}" aria-label="New step for Phase ${esc(p.id)}"><button class="small" data-a="add" data-id="${esc(p.id)}">Add step</button></div></details>`;}).join('');
+      return `<tr class="${live?'live':''}"><td class="id" data-l="Section">${esc(s.id)}</td><td data-l="Name">${esc(s.name)}${s.why?`<div class="why">${esc(s.why)}</div>`:''}</td><td data-l="Status">${status}</td><td class="n" data-l="Started">${when(s.start)}</td><td class="n" data-l="Finished">${when(s.end)}</td><td class="n" data-l="Work">${s.start?dur(work(s,t)):''}</td><td class="n" data-l="Breaks">${s.start&&nBrk(s,t)?nBrk(s,t)+' · '+dur(brkMs(s,t)):''}</td><td class="act" data-l=" ">${a}</td></tr>`;}).join('');
+    return `<details${p===firstOpen?' open':''}><summary>Chapter ${esc(p.id)}${p.name?' — '+esc(p.name):''}<span class="meta">${tot?dn+' of '+tot+' sections done':'sections not written yet'}${w?' · '+dur(w)+' of work':''}</span></summary>
+    ${p.question?`<p class="q"><b>The question:</b> ${esc(p.question)}</p>`:''}
+    ${tot?`<table class="stack"><thead><tr><th>Section</th><th>Name</th><th>Status</th><th class="n">Started</th><th class="n">Finished</th><th class="n">Work</th><th class="n">Breaks</th><th></th></tr></thead><tbody>${rows}</tbody></table>`:''}
+    <div class="add"><input id="add-${esc(p.id)}" data-p="${esc(p.id)}" placeholder="Add one section to Chapter ${esc(p.id)}" aria-label="New section for Chapter ${esc(p.id)}"><button class="small" data-a="add" data-id="${esc(p.id)}">Add step</button></div></details>`;}).join('');
   const lb=S.lastBackup,stale=!lb||t-lb>7*DAY;
   const keep=mode==='disk'?(diskOk?'<p class="note"><b>Saved to disk</b> on every click, in <code>~/.local/share/rl-timelog/data/state.json</code>, with a daily copy kept for 30 days. A power cut loses nothing you clicked.</p>':'<p class="warn">The saver isn’t answering, so clicks are only kept in this browser for now. Check it with <code>systemctl --user status rl-timelog</code>.</p>')
     :mode==='none'?'<p class="warn">This browser won’t keep data for this page. Open it at http://localhost:8765, or in a normal (not private) window.</p>'
     :`<p class="note">Saved in this browser only — opened as a plain file, without the saver. Open http://localhost:8765 instead. ${lb?'Last backup: '+when(lb)+'.':'No backup yet.'}</p>${stale?'<p class="warn">Download a backup — it’s been over a week, or you’ve never made one.</p>':''}`;
   const sel=(id,vals,cur,lab)=>`<select id="${id}" aria-label="${lab}">${vals.map(v=>`<option value="${v[0]}"${+cur===v[0]?' selected':''}>${v[1]}</option>`).join('')}</select>`;
   const reminder=`<p class="setl">Remind me to take a break after ${sel('s-work',[[25,'25 min'],[50,'50 min'],[90,'90 min'],[0,'never']],S.settings.work,'Work time before a break reminder')} of unbroken work, and suggest ${sel('s-rest',[[5,'5 min'],[10,'10 min'],[15,'15 min']],S.settings.rest,'Suggested break length')} breaks.</p>`;
-  root.innerHTML=`<div class="band"><h1>RL build, time log</h1><p class="sub">Start a step when you sit down to it, take a break when you step away, tick it when it passes review. The page reads the clock; everything below comes from those clicks.</p>${boardHTML(t)}</div>
-  <div class="band"><h2>How it’s going</h2><div class="stats">${stat(dur(st.today),'worked today','today')}${stat(dur(st.week),'worked in the last 7 days')}${stat(st.focus==null?'—':Math.round(st.focus*100)+'%','focus: work ÷ (work + breaks)')}${stat(st.bc?st.bc+' · '+dur(st.bt/st.bc):'—','breaks · average length')}${stat(st.pc?dur(st.over):'—','timed breaks ran over by, in total')}${stat(st.longest?dur(st.longest):'—','longest unbroken stretch')}${stat(st.n?dur(st.med):'—','typical step (median)')}</div>${proj}<p class="note">Breaks are your timed and untimed pauses plus gaps between steps, if under 3 hours on the same day. Anything longer counts as stopping for the day. Time the page wasn’t running (power cuts) is left out of everything.</p></div>
+  root.innerHTML=`<div class="band"><h1>RL build, time log</h1><p class="sub">Start a section when you sit down to it, take a break when you step away, tick it when it passes review. The page reads the clock; everything below comes from those clicks.</p>${boardHTML(t)}</div>
+  <div class="band"><h2>How it’s going</h2><div class="stats">${stat(dur(st.today),'worked today','today')}${stat(dur(st.week),'worked in the last 7 days')}${stat(st.focus==null?'—':Math.round(st.focus*100)+'%','focus: work ÷ (work + breaks)')}${stat(st.bc?st.bc+' · '+dur(st.bt/st.bc):'—','breaks · average length')}${stat(st.pc?dur(st.over):'—','timed breaks ran over by, in total')}${stat(st.longest?dur(st.longest):'—','longest unbroken stretch')}${stat(st.n?dur(st.med):'—','typical section (median)')}</div>${proj}<p class="note">Breaks are your timed and untimed pauses plus gaps between sections, if under 3 hours on the same day. Anything longer counts as stopping for the day. Time the page wasn’t running (power cuts) is left out of everything.</p></div>
   <div class="band"><h2>Last 14 days</h2><div class="days">${dayRows}</div></div>
-  <div class="band"><h2>Phases and steps</h2>${phases}</div>
-  <div class="band"><h2>Add a new phase’s steps</h2><div class="cols"><div><p class="note">Paste the step list Claude gives you when a phase opens. One step per line, like:</p><textarea id="imp" spellcheck="false" placeholder="Phase 1 — Thin slice&#10;1.1 Environment interface&#10;1.2 Math verifier&#10;1.3 REINFORCE with a baseline"></textarea><div class="btns"><button class="pri" data-a="imp">Add these steps</button></div><p class="note">Steps already here keep their times; only new ones are added and changed names are updated.</p>
+  <div class="band"><h2>Chapters and sections</h2>${phases}</div>
+  <div class="band"><h2>Add a new chapter’s sections</h2><div class="cols"><div><p class="note">Paste a chapter’s sections, one per line, like:</p><textarea id="imp" spellcheck="false" placeholder="Chapter 1 — The Whole Loop, Crudely&#10;question: How does a model get better from nothing but a score?&#10;1.1 A math verifier&#10;why: RL needs a score it can trust before anything can learn."></textarea><div class="btns"><button class="pri" data-a="imp">Add these sections</button></div><p class="note">Sections already here keep their times; only new ones are added, and changed names and whys are updated.</p>
   ${mode==='disk'?`<h3>Or import from GitHub</h3><p class="note">Every <code>.txt</code> or <code>.md</code> file in the repo’s <code>steps/</code> folder, in the same format. The saver pulls the repo each time.</p><div class="add"><input id="repo" value="${esc(S.settings.stepsRepo||'')}" placeholder="https://github.com/you/rl-build-steps" aria-label="Steps repo clone URL"><button class="pri" data-a="gh">Import from GitHub</button></div>${S.settings.lastImport?`<p class="note">Last import ${when(S.settings.lastImport.at)}, commit ${esc(S.settings.lastImport.commit)}, ${S.settings.lastImport.files} files.</p>`:''}`:''}</div>
-  <div><h3>Break reminder</h3>${reminder}<div class="btns"><button class="small" data-a="test">Test the sounds</button></div><h3>Your data</h3>${keep}<div class="btns"><button class="small" data-a="backup">Download backup</button><button class="small" data-a="pick">Restore from backup…</button><input type="file" id="file" accept=".json,application/json" hidden></div></div></div></div>${ed?modal():''}${rec?recHTML():''}`;
+  <div><h3>Break reminder</h3>${reminder}<div class="btns"><button class="small" data-a="test">Test the sounds</button></div><h3>Your data</h3>${keep}<div class="btns"><button class="small" data-a="backup">Download backup</button><button class="small" data-a="pick">Restore from backup…</button><button class="small" data-a="reset">Start over…</button><input type="file" id="file" accept=".json,application/json" hidden></div></div></div></div>${ed?modal():''}${rec?recHTML():''}`;
 }
-function recHTML(){return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="The page was off"><h2>The page was off for ${dur(now()-rec.from)}</h2><p>Last seen ${when(rec.from)}, while <b>${esc(rec.id)}</b> was running — a power cut, the browser closing, or the laptop asleep.</p><div class="btns"><button class="pri" data-a="recoff">Leave that time out</button><button data-a="recwork">I was working anyway</button></div><p class="note">“Leave it out” pauses the step from ${hm(rec.from)} until you click, and doesn’t count it as a break either.</p></div></div>`;}
+function recHTML(){return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="The page was off"><h2>The page was off for ${dur(now()-rec.from)}</h2><p>Last seen ${when(rec.from)}, while <b>${esc(rec.id)}</b> was running — a power cut, the browser closing, or the laptop asleep.</p><div class="btns"><button class="pri" data-a="recoff">Leave that time out</button><button data-a="recwork">I was working anyway</button></div><p class="note">“Leave it out” pauses the section from ${hm(rec.from)} until you click, and doesn’t count it as a break either.</p></div></div>`;}
 function modal(){const d=ed.d;
   const br=d.breaks.map((b,i)=>`<div class="brow"><input type="datetime-local" data-bs="${i}" value="${toInput(b[0])}" aria-label="Break ${i+1} start"><input type="datetime-local" data-be="${i}" value="${toInput(b[1])}" aria-label="Break ${i+1} end"><button class="small" data-a="rmb" data-i="${i}">Remove</button></div>${b[3]==='off'?'<p class="note">Page was off (left out of stats)</p>':''}`).join('');
   return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="Edit step ${esc(ed.id)}"><h2>Edit ${esc(ed.id)}</h2>
@@ -290,6 +304,8 @@ const A={
       importSteps(j.text,'GitHub @ '+j.commit);render();}
     catch(e){toast('Couldn’t reach the saver');render();}},
   backup(){download();},
+  reset(){if(!confirm('Start over? This downloads a backup first, then clears every section and time and loads the book’s Chapter 0. Your settings and steps repo are kept.'))return;
+    download();disarm();const keep=S.settings,r=S.rev||0;S=JSON.parse(JSON.stringify(SEED));S.settings=keep;S.rev=r;S.lastBackup=now();save();toast('Started over from Chapter 0');},
   pick(){document.getElementById('file').click();},
   test(){chime();setTimeout(()=>{armAlarm(now());setTimeout(disarm,1500);},1300);},
   recoff(){const s=find(rec.id);if(s)(s.breaks=s.breaks||[]).push([rec.from,now(),0,'off']);rec=null;save();},
