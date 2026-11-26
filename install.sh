@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# Knowledge Bank: full "paper & ink" desktop for CachyOS / Arch + Hyprland (0.55+, Lua config).
+# Paper & ink desktop for the RL build: CachyOS / Arch + Hyprland (0.55+, Lua config),
+# with the RL build time log at the centre of it.
 #
-#   ./install.sh                  install everything (vault at ~/vault)
-#   KB_VAULT=~/notes ./install.sh use another vault folder
+#   ./install.sh                  install everything
 #   ./install.sh --no-packages    skip pacman
 #
 # Your current desktop configs are MOVED (not deleted) to ~/.config/kb-backup/<date>/.
 # Undo everything with:  ./restore.sh
-# An existing vault is never touched.
+# Time log data in ~/.local/share/rl-timelog/data is never touched.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-VAULT="${KB_VAULT:-$HOME/vault}"
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}"
 BIN="$HOME/.local/bin"
 SHARE="$HOME/.local/share/kb"
@@ -33,14 +32,20 @@ PKGS=(
   # utilities
   cliphist wl-clipboard grim slurp brightnessctl playerctl pavucontrol network-manager-applet
   libnotify jq ripgrep fzf bat git xdg-utils curl fontconfig python
-  # knowledge bank
-  obsidian neovim zathura zathura-pdf-mupdf
+  # reading
+  zathura zathura-pdf-mupdf
   # look
   adw-gtk-theme papirus-icon-theme ttf-ibm-plex ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji
 )
 # rofi: older systems ship it as rofi-wayland; don't fight over it
 if ! pacman -Qq rofi >/dev/null 2>&1 && ! pacman -Qq rofi-wayland >/dev/null 2>&1; then
   PKGS+=(rofi)
+fi
+
+# The time log opens in its own browser window: Firefox (or a Firefox fork, or Chromium).
+if ! command -v firefox >/dev/null && ! command -v librewolf >/dev/null && ! command -v cachy-browser >/dev/null &&
+   ! command -v zen-browser >/dev/null && ! command -v chromium >/dev/null && ! command -v brave >/dev/null; then
+  PKGS+=(firefox)
 fi
 
 if [[ ${1:-} != --no-packages ]]; then
@@ -71,7 +76,7 @@ if (( ${#found[@]} )); then say "Found existing setup: ${found[*]}"; fi
 
 # Everything this rice owns (keep in sync with restore.sh).
 # Whatever exists and isn't already ours is moved into the backup folder.
-OWNED=(hypr waybar rofi mako kitty kbvim zathura starship.toml fish/conf.d/kb.fish
+OWNED=(hypr waybar rofi mako kitty zathura starship.toml fish/conf.d/kb.fish
        swaync dunst wofi fuzzel quickshell/kb qt6ct kdeglobals
        gtk-3.0/gtk.css gtk-3.0/colors.css gtk-3.0/settings.ini
        gtk-4.0/gtk.css gtk-4.0/colors.css gtk-4.0/settings.ini)
@@ -91,7 +96,7 @@ fi
 if (( ${#ours[@]} )); then
   # Update: add newly-owned files to the ORIGINAL backup
   BACKUP=$(cat "$CFG/kb-backup/latest" 2>/dev/null || echo "$BACKUP")
-  say "Knowledge Bank already installed - updating (backup: $BACKUP)"
+  say "Already installed - updating (backup: $BACKUP)"
 else
   say "Backing up current configs to $BACKUP"
 fi
@@ -108,10 +113,9 @@ echo "$BACKUP" >"$CFG/kb-backup/latest"
 rm -f "$BIN/kb-focus" # from the earlier add-on version
 
 # ── 4. Install configs, scripts, wallpaper ───────────────────────
-say "Installing the Knowledge Bank desktop"
+say "Installing the desktop"
 mkdir -p "$CFG"
 cp -r "$HERE/config/." "$CFG/"
-sed -i "s|@BIN@|$BIN|g" "$CFG/zathura/zathurarc"
 sed -i "s|@HOME@|$HOME|g" "$CFG/qt6ct/qt6ct.conf"
 mkdir -p "$CFG/kb"
 printf '%s\n' "${OWNED[@]}" >"$OWNED_LIST"
@@ -141,14 +145,18 @@ mkdir -p "$BIN"
 for f in "$HERE"/bin/*; do
   install -m755 "$f" "$BIN/$(basename "$f")"
 done
+# scripts from the notes version of this rice
+for old in kb-capture kb-common kb-daily kb-new kb-open kb-quote kb-resume kb-review kb-search kb-shot kb-stats kb-sync kv; do
+  rm -f "$BIN/$old"
+done
 
-[[ -f $CFG/kb/config ]] || printf 'VAULT="%s"\n' "$VAULT" >"$CFG/kb/config"
+touch "$CFG/kb/config"
 grep -q '^KB_WEATHER_LOCATION=' "$CFG/kb/config" ||
   printf '# Weather widget: a city name (empty = guess from your IP), units c or f\nKB_WEATHER_LOCATION=""\nKB_WEATHER_UNITS="c"\n' >>"$CFG/kb/config"
 
 # bash users get the prompt too (fish is handled by conf.d/kb.fish)
 if [[ -f $HOME/.bashrc ]] && ! grep -q 'starship init bash' "$HOME/.bashrc"; then
-  printf '\n# Knowledge Bank\nexport PATH="$HOME/.local/bin:$PATH"\ncommand -v starship >/dev/null && eval "$(starship init bash)"\n' >>"$HOME/.bashrc"
+  printf '\n# paper & ink rice\nexport PATH="$HOME/.local/bin:$PATH"\ncommand -v starship >/dev/null && eval "$(starship init bash)"\n' >>"$HOME/.bashrc"
 fi
 
 # ── 5. App theme (GTK), default apps ─────────────────────────────
@@ -165,37 +173,29 @@ if command -v gsettings >/dev/null; then
 fi
 xdg-mime default org.pwmt.zathura.desktop application/pdf 2>/dev/null || true
 
-# ── 6. Vault ─────────────────────────────────────────────────────
-if [[ -e $VAULT ]]; then
-  say "Vault $VAULT already exists - notes untouched; adding the paper theme for Obsidian."
-  mkdir -p "$VAULT/.obsidian/snippets"
-  cp "$HERE/vault/.obsidian/snippets/kb-paper.css" "$VAULT/.obsidian/snippets/"
-  app="$VAULT/.obsidian/appearance.json"
-  [[ -s $app ]] || echo '{}' >"$app"
-  tmp=$(mktemp)
-  if jq '.theme = "moonstone" | .accentColor = "#d7827e"
-         | .enabledCssSnippets = (((.enabledCssSnippets // []) + ["kb-paper"]) | unique)' "$app" >"$tmp"; then
-    mv "$tmp" "$app"
-  else
-    rm -f "$tmp"
-  fi
-  pgrep -x obsidian >/dev/null && warn "Obsidian is open - restart it to pick up the paper theme."
-else
-  say "Creating vault at $VAULT"
-  cp -r "$HERE/vault" "$VAULT"
-  git -C "$VAULT" init -q
-  git -C "$VAULT" config user.name  >/dev/null || git -C "$VAULT" config user.name "Knowledge Bank"
-  git -C "$VAULT" config user.email >/dev/null || git -C "$VAULT" config user.email "kb@localhost"
-  git -C "$VAULT" add -A
-  git -C "$VAULT" commit -qm "Start knowledge bank"
-fi
+# ── 6. The RL build time log ─────────────────────────────────────
+say "Installing the RL build time log (saver on http://localhost:8765)"
+RL="$HOME/.local/share/rl-timelog"
+mkdir -p "$RL/data"
+install -m644 "$HERE/rl-timelog/saver.py" "$HERE/rl-timelog/rl-time-log.html" \
+              "$HERE/rl-timelog/user.js" "$HERE/rl-timelog/userChrome.css" "$RL/"
+install -Dm644 "$HERE/systemd/rl-timelog.service" "$CFG/systemd/user/rl-timelog.service"
 
-# ── 7. Hourly vault auto-commit ──────────────────────────────────
-say "Enabling hourly vault commits"
-install -Dm644 "$HERE/systemd/kb-sync.service" "$CFG/systemd/user/kb-sync.service"
-install -Dm644 "$HERE/systemd/kb-sync.timer"   "$CFG/systemd/user/kb-sync.timer"
+# The notes version committed a vault every hour; that timer is gone now.
+if systemctl --user list-unit-files kb-sync.timer >/dev/null 2>&1; then
+  systemctl --user disable --now kb-sync.timer >/dev/null 2>&1 || true
+fi
+rm -f "$CFG/systemd/user/kb-sync.service" "$CFG/systemd/user/kb-sync.timer"
+
 systemctl --user daemon-reload
-systemctl --user enable --now kb-sync.timer >/dev/null
+systemctl --user enable rl-timelog.service >/dev/null
+systemctl --user restart rl-timelog.service
+sleep 1
+if curl -fsS --max-time 3 http://localhost:8765/api/summary >/dev/null 2>&1; then
+  say "Time log saver is running"
+else
+  warn "The saver didn't answer yet. Check: systemctl --user status rl-timelog"
+fi
 
 cat <<EOF
 
@@ -204,12 +204,10 @@ $(say "Done. Now REBOOT (or log out and back in) so the old bar and apps stop an
   After logging in:
     Super + /        shows every key
     Super + Space    opens apps
-    Super + K        knowledge-bank keys (capture, daily note, search, review…)
+    Super + K        the RL build time log (it also opens by itself at login, on workspace 1)
 
-  First time only:
-    1. Obsidian → "Open folder as vault" → $VAULT, then Settings → Core plugins → turn on Templates.
-       Matching theme: Settings → Appearance → Themes → "Rosé Pine" (switch it to light).
-    2. Run  kv  once while online - it downloads its Neovim plugins.
+  First time only: in the time log, click "Test the sounds" and turn the volume up
+  until you'd hear the break alarm from your desk.
 
   Your old configs are in: $(cat "$CFG/kb-backup/latest" 2>/dev/null || echo "(nothing to back up)")
   Go back to them anytime:  ./restore.sh

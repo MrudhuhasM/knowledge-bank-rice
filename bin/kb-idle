@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# kb-idle - what hypridle does when you're away, unless the RL time log is running.
+# While a step or a break is running the screen stays on, bright and unlocked, and the
+# laptop doesn't suspend: the page has to keep counting and the break alarm has to sound.
+#   kb-idle dim | undim | lock | off | on | suspend
+mark="${XDG_RUNTIME_DIR:-/tmp}/kb-idle-dimmed"
+busy() { "$HOME/.local/bin/rl-status" --busy; }
+
+case ${1:-} in
+  dim)     busy && exit 0; brightnessctl -s set 15% >/dev/null && touch "$mark" ;;
+  undim)   [[ -f $mark ]] && brightnessctl -r >/dev/null; rm -f "$mark" ;;
+  lock)    busy || loginctl lock-session ;;
+  off)     busy || hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })' ;;
+  on)      hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })' ;;
+  suspend) busy || systemctl suspend ;;
+  *)       echo "usage: kb-idle dim|undim|lock|off|on|suspend" >&2; exit 2 ;;
+esac

@@ -33,7 +33,7 @@ tooltip {
 tooltip label { color: @ink; letter-spacing: 0; }
 
 /* every module is its own little card */
-#workspaces, #window, #clock, #custom-kb, #pulseaudio, #backlight,
+#workspaces, #window, #clock, #custom-rl, #pulseaudio, #backlight,
 #network, #battery, #tray, #custom-power {
   background: alpha(@card, 0.92);
   color: @ink;
@@ -82,8 +82,14 @@ window#waybar.empty #window {
 
 #clock { font-weight: 600; padding: 0 18px; }
 
-#custom-kb { color: @love; }
-#custom-kb.busy { color: @gold; }
+/* RL time log: ink while working, pine on a break, rose when it's time for one,
+   love (and a rose border) when a break has run out */
+#custom-rl          { color: @ink; }
+#custom-rl.idle,
+#custom-rl.off      { color: @subtle; }
+#custom-rl.break    { color: @pine; }
+#custom-rl.due      { color: @love; border-color: @rose; }
+#custom-rl.over     { color: @card; background: @love; border-color: @love; }
 
 #battery.warning { color: @gold; }
 #battery.critical:not(.charging) { color: @love; }

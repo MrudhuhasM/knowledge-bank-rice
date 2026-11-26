@@ -1,5 +1,5 @@
 -- ╭──────────────────────────────────────────────────────────────╮
--- │  Knowledge Bank: a "paper & ink" Hyprland rice               │
+-- │  A "paper & ink" Hyprland rice for the RL build              │
 -- │  Lua config for Hyprland 0.55+ (syntax follows the official  │
 -- │  example/hyprland.lua). Personal tweaks go in user.lua.      │
 -- ╰──────────────────────────────────────────────────────────────╯
@@ -44,12 +44,13 @@ hl.monitor({
 hl.on("hyprland.start", function()
     hl.exec_cmd("swaybg -m fill -i " .. home .. "/.local/share/kb/wallpaper.png")
     hl.exec_cmd("waybar")
-    hl.exec_cmd("quickshell -c kb") -- desktop: clock, "where you left off", quiet month + weather
+    hl.exec_cmd("quickshell -c kb") -- desktop: clock, where the RL build stands, quiet month + weather
     hl.exec_cmd("mako")
     hl.exec_cmd("hypridle")
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
     hl.exec_cmd("wl-paste --watch cliphist store")
     hl.exec_cmd("command -v nm-applet >/dev/null && nm-applet --indicator")
+    hl.exec_cmd(bin .. "/rl-open --login") -- the time log, on workspace 1 (LOG)
 end)
 
 
@@ -59,7 +60,8 @@ end)
 hl.env("XCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
-hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto") -- Obsidian runs natively on Wayland
+hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto") -- Electron apps run natively on Wayland
+hl.env("MOZ_ENABLE_WAYLAND", "1")
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
 hl.env("QT_QPA_PLATFORMTHEME", "qt6ct") -- Qt/KDE apps use the paper palette
 -- Light-friendly colours for terminal tools
@@ -174,7 +176,7 @@ hl.gesture({
 --------------------
 ---- FOCUS MODE ----
 --------------------
--- Super+K then F: no gaps, borders, rounding, blur or animations; bar hidden; notifications paused.
+-- Super+Shift+K: no gaps, borders, rounding, blur or animations; bar hidden; notifications paused.
 local focused = false
 local function toggle_focus()
     focused = not focused
@@ -228,7 +230,7 @@ hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" 
 hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }))
 hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }))
 
--- Workspaces: 1 Write · 2 Read · 3 Web · 4 Term · 5 Misc
+-- Workspaces: 1 Log · 2 Read · 3 Web · 4 Term · 5 Misc
 for i = 1, 10 do
     local key = i % 10
     hl.bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = i }))
@@ -262,43 +264,13 @@ hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("playerctl play-pause"), { locked = tr
 hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
 
 
--------------------------------
----- KNOWLEDGE BANK (Super+K) ----
--------------------------------
--- Press Super+K, then one key. A notification lists them.
-hl.bind(mainMod .. " + K", function()
-    hl.exec_cmd("notify-send -t 4000 -a 'Knowledge Bank' 'Super+K …' "
-        .. "'C capture · P clip · D daily · N note · ⇧N source · G screenshot\n"
-        .. "S search · R review · O Obsidian · V vim · I inbox · H home · F focus'")
-    hl.dispatch(hl.dsp.submap("kb"))
-end)
-
-hl.define_submap("kb", function()
-    local function act(key, cmd)
-        hl.bind(key, function()
-            hl.exec_cmd(cmd)
-            hl.dispatch(hl.dsp.submap("reset"))
-        end)
-    end
-    act("C",         bin .. "/kb-capture")
-    act("P",         bin .. "/kb-capture --clip")
-    act("D",         bin .. "/kb-daily")
-    act("SHIFT + D", bin .. "/kb-daily --obsidian")
-    act("N",         bin .. "/kb-new")
-    act("SHIFT + N", bin .. "/kb-new --source")
-    act("G",         bin .. "/kb-shot")
-    act("S",         bin .. "/kb-search")
-    act("R",         bin .. "/kb-review")
-    act("O",         "obsidian")
-    act("V",         bin .. "/kb-open")
-    act("I",         bin .. "/kb-open inbox")
-    act("H",         bin .. "/kb-open home")
-    hl.bind("F", function()
-        toggle_focus()
-        hl.dispatch(hl.dsp.submap("reset"))
-    end)
-    hl.bind("escape", hl.dsp.submap("reset"))
-end)
+-----------------------------
+---- RL BUILD (Super + K) ----
+-----------------------------
+-- Super+K shows the time log (starting it if it was closed).
+-- Super+Shift+K toggles focus mode.
+hl.bind(mainMod .. " + K",         hl.dsp.exec_cmd(bin .. "/rl-open"))
+hl.bind(mainMod .. " + SHIFT + K", toggle_focus)
 
 
 --------------------------------
@@ -316,19 +288,11 @@ hl.window_rule({
     no_focus = true,
 })
 
--- Each kind of work has a home
-hl.window_rule({ name = "write-obsidian", match = { class = "^(obsidian)$" },               workspace = "1" })
+-- Each kind of work has a home: 1 LOG · 2 READ · 3 WEB · 4 TERM · 5 MISC
+hl.window_rule({ name = "log-timelog",    match = { class = "^(rl-timelog)$" },             workspace = "1" })
 hl.window_rule({ name = "read-zathura",   match = { class = "^(org.pwmt.zathura)$" },       workspace = "2" })
 hl.window_rule({ name = "web-browsers",   match = { class = "^(firefox|cachy-browser|chromium|brave-browser|zen)$" }, workspace = "3" })
 
--- Floating pop-ups (search, review, settings)
-hl.window_rule({
-    name   = "kb-float",
-    match  = { class = "^(kb\\.float)$" },
-    float  = true,
-    size   = { 1100, 650 },
-    center = true,
-})
 hl.window_rule({
     name   = "float-utilities",
     match  = { class = "^(pavucontrol|org.pulseaudio.pavucontrol|nm-connection-editor|blueman-manager)$" },

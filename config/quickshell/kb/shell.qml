@@ -1,19 +1,21 @@
-// Knowledge Bank: desktop (Quickshell 0.3+)
+// Paper & ink desktop (Quickshell 0.3+)
 // Drawn on the wallpaper, below windows. Launched by hyprland.lua: `quickshell -c kb`.
 //
-// When no window is open, the desktop shows where you left off in your learning,
-// read from the vault by kb-resume:
+// When no window covers it, the desktop shows where the RL build stands,
+// read from the time log's saver (rl-status --json):
 //
 //   Good morning.
 //   09:41
 //   SATURDAY · 14 NOVEMBER · WEEK 46
-//   ┌ where you left off ─────────────────────┐
-//   │ the module you're on, in the course     │
-//   │ next milestone on the path · last notes │
-//   │ a question waiting for you              │
-//   └─────────────────────────────────────────┘
+//   ┌ the bench ─────────────────── PHASE 0 · WORKBENCH ┐
+//   │ NOW · 0.3                                          │
+//   │ Batched generation with padding                    │
+//   │ 42m on this step · 18m since your last break       │
+//   │ ●●○○○○○○  2 of 8 steps     today 1h 20m · 7 days … │
+//   └────────────────────────────────────────────────────┘
 //
-//   (next to the clock, quiet) a small month with your study days · the weather
+//   (next to the clock, quiet) a small month with your work days · the weather
+//   Click the card to open the time log.
 
 import QtQuick
 import Quickshell
@@ -45,7 +47,7 @@ ShellRoot {
 
     // ── Data ──────────────────────────────────────────────────────
     property var weather: ({ ok: false })
-    property var resume: ({ ok: false })
+    property var rl: ({ ok: false })
 
     SystemClock { id: clock; precision: SystemClock.Seconds }
 
@@ -62,22 +64,21 @@ ShellRoot {
     Timer { interval: 15 * 60 * 1000; running: true; repeat: true; onTriggered: root.run(weatherProc) }
 
     Process {
-        id: resumeProc
-        command: ["sh", "-c", "exec " + root.bin + "kb-resume"]
+        id: rlProc
+        command: ["sh", "-c", "exec " + root.bin + "rl-status --json"]
         running: true
         stdout: StdioCollector {
-            onStreamFinished: { try { root.resume = JSON.parse(text) } catch (e) {} }
+            onStreamFinished: { try { root.rl = JSON.parse(text) } catch (e) {} }
         }
     }
-    Timer { interval: 2 * 60 * 1000; running: true; repeat: true; onTriggered: root.run(resumeProc) }
+    Timer { interval: 10 * 1000; running: true; repeat: true; onTriggered: root.run(rlProc) }
 
     function open(cmd) { Quickshell.execDetached(["sh", "-c", root.bin + cmd]) }
 
-    // Open a vault file (path relative to the vault) in Obsidian.
-    function openNote(file) {
-        if (!file || !root.resume.vault) return
-        Quickshell.execDetached(["xdg-open", "obsidian://open?vault=" + encodeURIComponent(root.resume.vault)
-                                 + "&file=" + encodeURIComponent(file.replace(/\.md$/, ""))])
+    // 3m · 42m · 1h 05m
+    function dur(ms) {
+        const m = Math.round(Math.max(0, ms || 0) / 60000)
+        return m < 60 ? m + "m" : Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m"
     }
 
     function greeting(h) {
@@ -119,25 +120,6 @@ ShellRoot {
         font.pixelSize: 11
         font.letterSpacing: 1.4
         elide: Text.ElideRight
-    }
-
-    // A block you can click to open its note; ink darkens a touch on hover.
-    component Block: Item {
-        id: blk
-        default property alias content: col.data
-        property string file
-        property alias hovered: ma.containsMouse
-        width: parent.width
-        implicitHeight: col.implicitHeight
-        Column { id: col; width: parent.width; spacing: 6 }
-        MouseArea {
-            id: ma
-            anchors.fill: parent
-            anchors.margins: -8
-            hoverEnabled: true
-            cursorShape: blk.file ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: root.openNote(blk.file)
-        }
     }
 
     component Rule: Rectangle { width: parent.width; height: 1; color: root.line }
@@ -220,7 +202,7 @@ ShellRoot {
                             spacing: 14
                             opacity: 0.9
 
-                            // Mini month: today is ink, study days carry a rose dot
+                            // Mini month: today is ink, days you worked on the build carry a rose dot
                             Column {
                                 id: cal
                                 spacing: 4
@@ -229,7 +211,7 @@ ShellRoot {
                                 readonly property int today: clock.date.getDate()
                                 readonly property int lead: (new Date(year, month, 1).getDay() + 6) % 7
                                 readonly property int days: new Date(year, month + 1, 0).getDate()
-                                readonly property var active: root.resume.monthActive || []
+                                readonly property var active: root.rl.monthDays || []
 
                                 anchors.right: parent.right
                                 Caption { text: Qt.locale("en_US").toString(clock.date, "MMMM").toUpperCase(); font.pixelSize: 10 }
@@ -304,18 +286,19 @@ ShellRoot {
                         MouseArea { anchors.fill: quiet; onClicked: root.run(weatherProc) }
                     }
 
-                    // ── The sheet ──────────────────────────────────
+                    // ── The bench: where the RL build stands ──────
                     Item {
                         id: sheet
-                        visible: root.resume.ok === true
+                        readonly property var r: root.rl
+                        readonly property bool live: r.ok === true && r.empty !== true
+                        readonly property var step: r.step || null
+                        readonly property var nxt: r.next || null
+                        readonly property var brk: r.brk || null
+                        readonly property var ph: r.phase || null
+                        readonly property bool over: brk !== null && brk.planMs > 0 && brk.leftMs === 0
+                        visible: live
                         width: root.sheetWidth
                         height: visible ? body.implicitHeight + 56 : 0
-                        readonly property var r: root.resume
-                        readonly property var src: r.source || null
-                        readonly property var trk: r.track || null
-                        readonly property var rec: r.recent || []
-                        readonly property var q: (r.questions && r.questions.first) || null
-                        readonly property var grow: r.revisit || null
 
                         // soft ink shadow, then paper
                         Rectangle { anchors.fill: bg; anchors.topMargin: 10; anchors.bottomMargin: -10; radius: 24; color: "#0b575279" }
@@ -325,7 +308,7 @@ ShellRoot {
                             anchors.fill: parent
                             radius: 22
                             color: Qt.rgba(1, 0.98, 0.953, 0.93)
-                            border.color: root.line
+                            border.color: sheet.over || sheet.r.due ? root.rose : root.line
                         }
                         // a rose margin line, like a notebook page
                         Rectangle { x: 18; y: 24; width: 1.5; height: parent.height - 48; color: root.rose; opacity: 0.45 }
@@ -334,168 +317,127 @@ ShellRoot {
                             id: body
                             x: 40; y: 26
                             width: parent.width - 72
-                            spacing: 20
+                            spacing: 18
 
                             // header
                             Item {
                                 width: parent.width; height: 16
-                                Label { text: "where you left off" }
+                                Label { text: "the bench" }
                                 Caption {
                                     anchors.right: parent.right
-                                    visible: sheet.rec.length > 0
-                                    text: sheet.rec.length ? ("last here " + sheet.rec[0].ago).toUpperCase() : ""
+                                    visible: sheet.ph !== null
+                                    text: sheet.ph ? ("phase " + sheet.ph.id + " · " + sheet.ph.name).toUpperCase() : ""
+                                    width: Math.min(implicitWidth, parent.width - 140)
                                 }
                             }
 
-                            // 1 · the source and the module you're on
-                            Block {
-                                visible: sheet.src !== null
-                                file: sheet.src ? sheet.src.file : ""
+                            // the step: now / on a break / next
+                            Column {
+                                width: parent.width
+                                spacing: 6
                                 Caption {
                                     width: parent.width
-                                    text: sheet.src ? (["continue", sheet.src.title, sheet.src.section].filter(x => x).join("  ·  ")).toUpperCase() : ""
+                                    text: (sheet.step ? (sheet.brk ? "on a break · " : "now · ") + sheet.step.id
+                                           : sheet.nxt ? "next · " + sheet.nxt.id : "nothing waiting").toUpperCase()
                                 }
                                 Text {
                                     width: parent.width
-                                    text: sheet.src ? (sheet.src.next || sheet.src.progress || sheet.src.full) : ""
+                                    text: sheet.step ? sheet.step.name : sheet.nxt ? sheet.nxt.name : "Paste the next phase’s steps into the time log."
                                     wrapMode: Text.WordWrap
                                     maximumLineCount: 2
                                     elide: Text.ElideRight
                                     color: root.ink
                                     font.family: root.serif
                                     font.pixelSize: 30
-                                    font.weight: Font.Normal
                                     lineHeight: 1.05
                                 }
                                 Text {
                                     width: parent.width
                                     visible: text.length > 0
-                                    text: sheet.src && sheet.src.nextConcepts.length ? sheet.src.nextConcepts.join("  ·  ") : ""
-                                    elide: Text.ElideRight
-                                    color: root.pine
-                                    font.family: root.sans
-                                    font.pixelSize: 14
+                                    wrapMode: Text.WordWrap
+                                    color: sheet.over || sheet.r.due ? root.love : sheet.brk ? root.pine : root.subtle
+                                    font.family: sheet.over || sheet.r.due ? root.serif : root.sans
+                                    font.italic: sheet.over || sheet.r.due
+                                    font.pixelSize: sheet.over || sheet.r.due ? 19 : 15
+                                    text: sheet.over ? "Break’s over — " + root.dur(sheet.brk.overMs) + " past the plan. Back to work."
+                                        : sheet.brk ? (sheet.brk.planMs ? "Break · " + root.dur(sheet.brk.leftMs) + " left" : "Break · " + root.dur(sheet.brk.sinceMs) + " so far")
+                                        : sheet.r.due ? root.dur(sheet.r.sinceBreakMs) + " without a break. Stand up for " + sheet.r.restMin + " minutes."
+                                        : sheet.step ? root.dur(sheet.step.workMs) + " on this step · " + root.dur(sheet.r.sinceBreakMs) + " since your last break"
+                                        : ""
                                 }
                             }
 
-                            Rule { visible: sheet.src !== null && (sheet.trk !== null || sheet.rec.length > 0) }
+                            Rule {}
 
-                            // 2 · next on the path | last touched
-                            Row {
+                            // phase progress | today and this week
+                            Item {
                                 width: parent.width
-                                spacing: 28
-                                visible: sheet.trk !== null || sheet.rec.length > 0
-
-                                Block {
-                                    width: sheet.rec.length ? (parent.width - 28) * 0.55 : parent.width
-                                    visible: sheet.trk !== null
-                                    file: sheet.trk ? sheet.trk.file : ""
-                                    Caption { width: parent.width; text: "NEXT ON THE PATH" }
-                                    Text {
-                                        width: parent.width
-                                        text: sheet.trk ? sheet.trk.next : ""
-                                        wrapMode: Text.WordWrap
-                                        maximumLineCount: 2
-                                        elide: Text.ElideRight
-                                        color: root.ink
-                                        font.family: root.serif
-                                        font.pixelSize: 18
-                                    }
-                                    // stage progress as small dots
+                                height: Math.max(prog.implicitHeight, totals.implicitHeight)
+                                Column {
+                                    id: prog
+                                    spacing: 8
+                                    visible: sheet.ph !== null
+                                    Caption { text: "PHASE PROGRESS" }
                                     Row {
-                                        spacing: 8
+                                        spacing: 10
                                         Row {
                                             spacing: 4
                                             anchors.verticalCenter: parent.verticalCenter
                                             Repeater {
-                                                model: sheet.trk ? sheet.trk.stageTotal : 0
+                                                model: sheet.ph ? Math.min(sheet.ph.total, 24) : 0
                                                 Rectangle {
                                                     required property int index
-                                                    width: 7; height: 7; radius: 3.5
-                                                    color: index < sheet.trk.stageDone ? root.rose : "transparent"
+                                                    width: 8; height: 8; radius: 4
+                                                    color: index < sheet.ph.done ? root.rose : "transparent"
                                                     border.color: root.muted
-                                                    border.width: index < sheet.trk.stageDone ? 0 : 1
+                                                    border.width: index < sheet.ph.done ? 0 : 1
                                                 }
                                             }
                                         }
-                                        Caption {
-                                            text: sheet.trk ? ("stage " + sheet.trk.stage).toUpperCase() : ""
-                                        }
+                                        Caption { text: sheet.ph ? (sheet.ph.done + " of " + sheet.ph.total + " steps").toUpperCase() : "" }
                                     }
                                 }
-
-                                Column {
-                                    width: sheet.trk ? (parent.width - 28) * 0.45 : parent.width
-                                    visible: sheet.rec.length > 0
-                                    spacing: 6
-                                    Caption { text: "LAST TOUCHED" }
+                                Row {
+                                    id: totals
+                                    anchors.right: parent.right
+                                    spacing: 26
                                     Repeater {
-                                        model: Math.min(3, sheet.rec.length)
-                                        Item {
-                                            id: recRow
-                                            required property int index
-                                            readonly property var n: sheet.rec[index]
-                                            width: parent.width; height: 22
+                                        model: [["today", sheet.r.todayMs], ["last 7 days", sheet.r.weekMs]]
+                                        Column {
+                                            required property var modelData
+                                            spacing: 2
+                                            Caption { text: modelData[0].toUpperCase() }
                                             Text {
-                                                width: parent.width - 4
-                                                text: (recRow.n.icon ? recRow.n.icon + " " : "") + recRow.n.title
-                                                elide: Text.ElideRight
-                                                color: recRow.index === 0 ? root.ink : root.subtle
-                                                font.family: root.sans
-                                                font.pixelSize: 14
-                                                font.weight: recRow.index === 0 ? Font.Medium : Font.Normal
-                                            }
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.openNote(recRow.n.file)
+                                                text: root.dur(modelData[1])
+                                                color: root.ink
+                                                font.family: root.serif
+                                                font.pixelSize: 24
+                                                font.weight: Font.Light
                                             }
                                         }
                                     }
-                                }
-                            }
-
-                            Rule { visible: sheet.q !== null || sheet.grow !== null }
-
-                            // 3 · a question waiting (or a seed to grow)
-                            Block {
-                                visible: sheet.q !== null || sheet.grow !== null
-                                file: sheet.q ? sheet.q.file : (sheet.grow ? sheet.grow.file : "")
-                                Item {
-                                    width: parent.width; height: 14
-                                    Caption { text: sheet.q ? "A QUESTION WAITING" : "A SEED TO GROW" }
-                                    Caption {
-                                        anchors.right: parent.right
-                                        visible: sheet.q !== null && root.resume.questions.count > 1
-                                        text: sheet.q ? (root.resume.questions.count - 1) + " MORE OPEN" : ""
-                                    }
-                                }
-                                Text {
-                                    width: parent.width
-                                    text: sheet.q ? sheet.q.text : (sheet.grow ? sheet.grow.icon + " " + sheet.grow.title + (sheet.grow.hint ? " — " + sheet.grow.hint : "") : "")
-                                    wrapMode: Text.WordWrap
-                                    maximumLineCount: 2
-                                    elide: Text.ElideRight
-                                    color: root.love
-                                    font.family: root.serif
-                                    font.italic: true
-                                    font.pixelSize: 19
-                                    lineHeight: 1.1
                                 }
                             }
                         }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.open("rl-open")
+                        }
                     }
 
-                    // Nothing to resume yet (a new vault)
+                    // The saver isn't answering, or nothing has been tracked yet
                     Text {
-                        visible: root.resume.ok !== true
+                        visible: !sheet.live
                         width: root.sheetWidth
-                        text: "Your notes will meet you here.\nSuper + K, then C to capture the first thought."
+                        text: root.rl.ok === true ? "The bench is ready.\nSuper + K opens the time log; start your first step there."
+                                                  : "The time log isn’t running.\nsystemctl --user start rl-timelog"
                         color: root.subtle
                         font.family: root.serif
                         font.italic: true
                         font.pixelSize: 20
                         lineHeight: 1.2
+                        MouseArea { anchors.fill: parent; onClicked: root.open("rl-open") }
                     }
                 }
             }

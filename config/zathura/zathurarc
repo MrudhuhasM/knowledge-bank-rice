@@ -1,5 +1,4 @@
-# zathura — PDF / book reader for the Knowledge Bank (Rosé Pine Dawn colours)
-# Select text with the mouse, then press C to send it to the Inbox.
+# zathura — PDF / book reader (Rosé Pine Dawn colours)
 # Ctrl+R flips to dark (recolor) for night reading.
 
 set selection-clipboard clipboard
@@ -11,7 +10,6 @@ set guioptions "s"
 set window-title-basename true
 set statusbar-home-tilde true
 
-map C exec "@BIN@/kb-capture --clip"
 map <C-r> recolor
 
 set default-bg            "#faf4ed"
