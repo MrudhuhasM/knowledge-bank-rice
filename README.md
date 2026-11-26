@@ -39,15 +39,16 @@ To undo everything: `./restore.sh`, then reboot.
 
 It's a web page served by a small saver (`saver.py`, Python standard library only) running as a systemd user service on `http://localhost:8765`, reachable only from this laptop. The window is a separate, minimal Firefox profile (no toolbars, sound allowed without a click, no "restore session?" after a power cut). It uses Firefox, LibreWolf, cachy-browser or Zen if you have one, otherwise Chromium or Brave.
 
-**New phase steps:** when a phase opens, Claude gives you its steps as plain lines:
+**New phase steps:** keep them in one git repo (for example `rl-build-steps`), one file per phase in a `steps/` folder:
 
 ```
-Phase 1 — Thin slice
-1.1 Environment interface
-1.2 Math verifier
+steps/phase-1.txt
+  Phase 1 — Thin slice
+  1.1 Environment interface
+  1.2 Math verifier
 ```
 
-Paste them into **Add a new phase's steps**. Steps already there keep their times. A handy way to carry them over: commit them to your RL repo as `phases/p1/STEPS.txt` and copy them from GitHub on this laptop.
+When a phase opens, push its file, then click **Import from GitHub** in the time log (the repo URL is remembered). The saver clones the repo the first time and pulls it after that, reads every `.txt`/`.md` file in `steps/`, and adds only what's new: steps already there keep their times, and renamed steps get their new names. Importing again when nothing changed does nothing. A private repo works too if this laptop can `git clone` it (an SSH key, with a `git@github.com:…` URL). You can also paste the lines straight into the box instead.
 
 **Backups:** the saver keeps a copy per day for 30 days in `~/.local/share/rl-timelog/data/backups/`. **Download backup** in the page saves a JSON file you can keep elsewhere; **Restore from backup** loads one.
 
