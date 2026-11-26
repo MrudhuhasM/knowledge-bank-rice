@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# rl-status - the RL build time log, in a line or two, from the saver's /api/summary.
+# rl-status - the RL build time log (chapters and sections), in a line or two, from the saver's /api/summary.
 #   rl-status            plain text ("0.3 Batched generation with padding · 42m")
 #   rl-status --waybar   JSON for the bar module
 #   rl-status --json     the raw summary (the desktop card reads this)
 #   rl-status --lock     one line for the lock screen (Pango-escaped)
-#   rl-status --busy     exit 0 while a step or a break is running, 1 otherwise
+#   rl-status --busy     exit 0 while a section or a break is running, 1 otherwise
 #                        (hypridle uses this to keep the screen on)
 url="http://localhost:${RL_TIMELOG_PORT:-8765}/api/summary"
 s=$(curl -fsS --max-time 2 "$url" 2>/dev/null) || s='{"ok":false}'
@@ -23,7 +23,7 @@ jq -r --arg mode "$mode" '
   def dur: (. / 60000 | round) as $m
     | if $m < 60 then "\($m)m" else "\($m / 60 | floor)h \($m % 60 | tostring | if length < 2 then "0" + . else . end)m" end;
   def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
-  def phase: if .phase then "Phase \(.phase.id) — \(.phase.name) · \(.phase.done) of \(.phase.total) steps done" else "" end;
+  def phase: if .phase then "Chapter \(.phase.id) — \(.phase.name) · \(.phase.done) of \(.phase.total) sections done" else "" end;
 
   if .ok != true then
     if $mode == "--waybar" then {text: "  off", class: "off",
@@ -43,9 +43,9 @@ jq -r --arg mode "$mode" '
         else {t: "  \(.step.id) · \(.step.workMs | dur)", c: "running"} end)
      elif .next then {t: "  next \(.next.id)", c: "idle"}
      else {t: "", c: "idle"} end) as $b
-    | (if .step then "\(.step.id) — \(.step.name)\n\(.step.workMs | dur) on this step"
+    | (if .step then "\(.step.id) — \(.step.name)\n\(.step.workMs | dur) on this section"
           + (if .running then " · \(.sinceBreakMs | dur) since your last break" else "" end)
-       elif .next then "Next: \(.next.id) — \(.next.name)" else "No steps waiting" end) as $what
+       elif .next then "Next: \(.next.id) — \(.next.name)" else "No sections waiting" end) as $what
     | if $mode == "--waybar" then
         {text: $b.t, class: $b.c,
          tooltip: ("\($what)\n\(phase)\nToday \(.todayMs | dur) · last 7 days \(.weekMs | dur)\n\nClick: open the time log" | esc)} | tojson

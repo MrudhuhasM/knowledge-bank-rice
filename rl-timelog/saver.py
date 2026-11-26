@@ -10,6 +10,7 @@ Serves the time log page at http://localhost:8765 and keeps its data on disk.
   GET  /api/summary   a small digest for the bar, the desktop and the lock screen
   PUT  /api/import    {"url": ...}: clone or pull a git repo of phase steps and
                       return the text of every .txt/.md file in its steps/ folder
+                      (one file per chapter: steps/chapter-N.txt)
 
 Every write goes to a temp file, is fsync'd and renamed into place, so a power
 cut leaves the old or the new file, never half of one. One copy per day is kept
@@ -275,7 +276,7 @@ def notifier():
                     step = s["step"]
                     remind_id = notify(
                         "Time for a break",
-                        f"{dur(s['sinceBreakMs'])} without a break on {step['id']}. "
+                        f"{dur(s['sinceBreakMs'])} without a break on section {step['id']}. "
                         f"Take {s['restMin']} minutes: stand up, look away from the screen.",
                         replace=remind_id)
                     last_remind = now
