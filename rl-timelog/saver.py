@@ -8,6 +8,8 @@ Serves the time log page at http://localhost:8765 and keeps its data on disk.
   PUT  /api/state     save (refused with 409 if a newer save is already on disk)
   PUT  /api/beat      "the page is still open" (lets it notice power cuts)
   GET  /api/summary   a small digest for the bar, the desktop and the lock screen
+  PUT  /api/import    {"url": ...}: clone or pull a git repo of phase steps and
+                      return the text of every .txt/.md file in its steps/ folder
 
 Every write goes to a temp file, is fsync'd and renamed into place, so a power
 cut leaves the old or the new file, never half of one. One copy per day is kept
@@ -191,6 +193,48 @@ def summarize(S, t):
     return out
 
 
+# ── phase steps from a git repo ─────────────────────────────────────
+STEPS_REPO = os.path.join(DATA, "steps-repo")
+
+
+def git(*args, timeout=90):
+    return subprocess.run(["git", *args], capture_output=True, text=True, timeout=timeout,
+                          env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+
+
+def import_steps(url):
+    if not (url.startswith("https://") or url.startswith("git@")) or any(c.isspace() for c in url):
+        return {"ok": False, "error": "Give the repo's clone URL (https://… or git@…)"}
+    if not shutil.which("git"):
+        return {"ok": False, "error": "git isn't installed"}
+    if os.path.isdir(os.path.join(STEPS_REPO, ".git")):
+        cur = git("-C", STEPS_REPO, "remote", "get-url", "origin").stdout.strip()
+        if cur != url:
+            shutil.rmtree(STEPS_REPO)
+    if os.path.isdir(os.path.join(STEPS_REPO, ".git")):
+        r = git("-C", STEPS_REPO, "fetch", "--depth", "1", "origin")
+        if r.returncode == 0:
+            r = git("-C", STEPS_REPO, "reset", "--hard", "FETCH_HEAD")
+    else:
+        r = git("clone", "--depth", "1", url, STEPS_REPO)
+    if r.returncode != 0:
+        msg = (r.stderr.strip().splitlines() or ["git failed"])[-1]
+        return {"ok": False, "error": "git: " + msg}
+    commit = git("-C", STEPS_REPO, "rev-parse", "--short", "HEAD").stdout.strip()
+    folder = os.path.join(STEPS_REPO, "steps")
+    if not os.path.isdir(folder):
+        return {"ok": False, "error": "The repo has no steps/ folder"}
+    files, parts = [], []
+    for root, _, names in os.walk(folder):
+        for n in names:
+            if n.lower().endswith((".txt", ".md")):
+                files.append(os.path.relpath(os.path.join(root, n), folder))
+    for rel in sorted(files):
+        with open(os.path.join(folder, rel), encoding="utf-8", errors="replace") as f:
+            parts.append(f.read())
+    return {"ok": True, "commit": commit, "files": sorted(files), "text": "\n".join(parts)}
+
+
 # ── desktop notifications ───────────────────────────────────────────
 def notify(summary, body, urgency="normal", replace=None):
     if not shutil.which("notify-send"):
@@ -296,6 +340,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = self.path.split("?")[0]
         body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        if path == "/api/import":
+            try:
+                url = (json.loads(body) or {}).get("url", "").strip()
+            except (ValueError, AttributeError):
+                return self.reply(400, b'{"ok":false,"error":"not JSON"}')
+            try:
+                res = import_steps(url)
+            except subprocess.TimeoutExpired:
+                res = {"ok": False, "error": "git took too long (no network?)"}
+            return self.reply(200 if res["ok"] else 400, json.dumps(res).encode())
         if path == "/api/beat":
             with LOCK:
                 atomic_write(BEAT, str(int(time.time() * 1000)).encode())
