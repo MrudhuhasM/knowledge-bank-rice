@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# rl-status - the RL build time log, in a line or two, from the saver's /api/summary.
+#   rl-status            plain text ("0.3 Batched generation with padding · 42m")
+#   rl-status --waybar   JSON for the bar module
+#   rl-status --json     the raw summary (the desktop card reads this)
+#   rl-status --lock     one line for the lock screen (Pango-escaped)
+#   rl-status --busy     exit 0 while a step or a break is running, 1 otherwise
+#                        (hypridle uses this to keep the screen on)
+url="http://localhost:${RL_TIMELOG_PORT:-8765}/api/summary"
+s=$(curl -fsS --max-time 2 "$url" 2>/dev/null) || s='{"ok":false}'
+mode=${1:-}
+
+if [[ $mode == --busy ]]; then
+  jq -e '.busy == true' >/dev/null <<<"$s"
+  exit
+fi
+if [[ $mode == --json ]]; then
+  printf '%s\n' "$s"
+  exit 0
+fi
+
+jq -r --arg mode "$mode" '
+  def dur: (. / 60000 | round) as $m
+    | if $m < 60 then "\($m)m" else "\($m / 60 | floor)h \($m % 60 | tostring | if length < 2 then "0" + . else . end)m" end;
+  def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+  def phase: if .phase then "Phase \(.phase.id) — \(.phase.name) · \(.phase.done) of \(.phase.total) steps done" else "" end;
+
+  if .ok != true then
+    if $mode == "--waybar" then {text: "  off", class: "off",
+      tooltip: "The time log saver is not running.\nsystemctl --user start rl-timelog"} | tojson
+    elif $mode == "--lock" then ""
+    else "time log: saver not running" end
+  elif .empty then
+    if $mode == "--waybar" then {text: "", class: "idle", tooltip: "Click: open the time log"} | tojson else "" end
+  else
+    (if .onBreak then
+       (if .brk.planMs > 0 and .brk.leftMs == 0 then
+          {t: "  back to work · +\(.brk.overMs | dur)", c: "over"}
+        elif .brk.planMs > 0 then {t: "  break · \(.brk.leftMs | dur) left", c: "break"}
+        else {t: "  break · \(.brk.sinceMs | dur)", c: "break"} end)
+     elif .running then
+       (if .due then {t: "  \(.step.id) · \(.sinceBreakMs | dur) — time for a break", c: "due"}
+        else {t: "  \(.step.id) · \(.step.workMs | dur)", c: "running"} end)
+     elif .next then {t: "  next \(.next.id)", c: "idle"}
+     else {t: "", c: "idle"} end) as $b
+    | (if .step then "\(.step.id) — \(.step.name)\n\(.step.workMs | dur) on this step"
+          + (if .running then " · \(.sinceBreakMs | dur) since your last break" else "" end)
+       elif .next then "Next: \(.next.id) — \(.next.name)" else "No steps waiting" end) as $what
+    | if $mode == "--waybar" then
+        {text: $b.t, class: $b.c,
+         tooltip: ("\($what)\n\(phase)\nToday \(.todayMs | dur) · last 7 days \(.weekMs | dur)\n\nClick: open the time log" | esc)} | tojson
+      elif $mode == "--lock" then
+        ((if .step then "\(.step.id) \(.step.name)" elif .next then "Next: \(.next.id) \(.next.name)" else "" end)
+          + (if .todayMs > 0 then " · \(.todayMs | dur) today" else "" end)) | esc
+      else
+        (if .step then "\(.step.id) \(.step.name) · \(.step.workMs | dur)" elif .next then "next: \(.next.id) \(.next.name)" else "" end)
+      end
+  end' <<<"$s"

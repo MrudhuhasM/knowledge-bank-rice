@@ -1,4 +1,4 @@
-# Knowledge Bank: notifications (paper & ink)
+# Notifications (paper & ink)
 font=IBM Plex Sans 11
 background-color=#fffaf3
 text-color=#575279
@@ -24,3 +24,11 @@ default-timeout=0
 
 [mode=do-not-disturb]
 invisible=1
+
+# RL time log: "break's over" waits for you; the break reminder stays a little longer
+[app-name="RL build"]
+border-color=#b4637a
+default-timeout=15000
+
+[app-name="RL build" urgency=critical]
+default-timeout=0

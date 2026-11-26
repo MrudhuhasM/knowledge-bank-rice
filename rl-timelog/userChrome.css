@@ -1,0 +1,2 @@
+/* The time log window looks like an app: no tabs, address bar or bookmarks. */
+#TabsToolbar, #nav-bar, #PersonalToolbar, #titlebar { visibility: collapse !important; }

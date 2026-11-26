@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# kv - the vault's own Neovim (config in ~/.config/kbvim, separate from any other nvim setup).
-# No arguments: opens today's daily note inside the vault.
-# shellcheck source=kb-common
-source "$(dirname "$(readlink -f "$0")")/kb-common"
-(( $# )) || cd "$VAULT" || exit 1
-exec env NVIM_APPNAME=kbvim nvim "$@"

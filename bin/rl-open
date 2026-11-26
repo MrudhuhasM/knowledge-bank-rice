@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# rl-open - show the time log: focus its window, or start it in its own browser window.
+# The window gets the class "rl-timelog"; hyprland.lua puts it on workspace 1 (LOG).
+#   rl-open           open it and switch to it
+#   rl-open --login   start it quietly at login (no workspace switch)
+URL="http://localhost:${RL_TIMELOG_PORT:-8765}"
+PROFILE="$HOME/.local/share/rl-timelog/browser"
+
+focus() { [[ ${1:-} == --login ]] || hyprctl dispatch 'hl.dsp.focus({ workspace = 1 })' >/dev/null 2>&1; }
+
+if pgrep -f -- "$PROFILE" >/dev/null; then
+  focus "$@"
+  exit 0
+fi
+
+# The saver starts with your session; give it a few seconds after login.
+for _ in $(seq 20); do
+  curl -fsS --max-time 1 "$URL/api/summary" >/dev/null 2>&1 && break
+  sleep 0.5
+done
+
+mkdir -p "$PROFILE"
+for b in firefox librewolf cachy-browser zen-browser; do
+  if command -v "$b" >/dev/null; then
+    # A separate, minimal profile: no toolbars, sound allowed, no "restore session?" after a power cut.
+    cp -f "$HOME/.local/share/rl-timelog/user.js" "$PROFILE/user.js" 2>/dev/null
+    mkdir -p "$PROFILE/chrome"
+    cp -f "$HOME/.local/share/rl-timelog/userChrome.css" "$PROFILE/chrome/userChrome.css" 2>/dev/null
+    setsid -f "$b" --new-instance --profile "$PROFILE" --name rl-timelog --class rl-timelog "$URL" >/dev/null 2>&1
+    focus "$@"
+    exit 0
+  fi
+done
+for b in chromium brave google-chrome-stable; do
+  if command -v "$b" >/dev/null; then
+    setsid -f "$b" --user-data-dir="$PROFILE" --app="$URL" --class=rl-timelog \
+      --autoplay-policy=no-user-gesture-required --hide-crash-restore-bubble >/dev/null 2>&1
+    focus "$@"
+    exit 0
+  fi
+done
+notify-send -a "RL build" "No browser found" "Install firefox (sudo pacman -S firefox) or open $URL yourself."
+exit 1

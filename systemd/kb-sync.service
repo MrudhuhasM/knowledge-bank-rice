@@ -1,6 +1,0 @@
-[Unit]
-Description=Commit Knowledge Bank vault changes to git
-
-[Service]
-Type=oneshot
-ExecStart=%h/.local/bin/kb-sync

@@ -1,4 +1,4 @@
-// Knowledge Bank: floating-island bar
+// Paper & ink floating-island bar, with the RL build time log
 {
   "layer": "top",
   "position": "top",
@@ -10,12 +10,12 @@
 
   "modules-left": ["hyprland/workspaces", "hyprland/window"],
   "modules-center": ["clock"],
-  "modules-right": ["custom/kb", "pulseaudio", "backlight", "network", "battery", "tray", "custom/power"],
+  "modules-right": ["custom/rl", "pulseaudio", "backlight", "network", "battery", "tray", "custom/power"],
 
   "hyprland/workspaces": {
     "format": "{icon}",
     "format-icons": {
-      "1": "WRITE",
+      "1": "LOG",
       "2": "READ",
       "3": "WEB",
       "4": "TERM",
@@ -45,13 +45,11 @@
     }
   },
 
-  "custom/kb": {
-    "exec": "~/.local/bin/kb-stats",
+  "custom/rl": {
+    "exec": "~/.local/bin/rl-status --waybar",
     "return-type": "json",
-    "interval": 60,
-    "on-click": "~/.local/bin/kb-daily",
-    "on-click-right": "~/.local/bin/kb-review",
-    "on-click-middle": "~/.local/bin/kb-capture"
+    "interval": 5,
+    "on-click": "~/.local/bin/rl-open"
   },
 
   "pulseaudio": {

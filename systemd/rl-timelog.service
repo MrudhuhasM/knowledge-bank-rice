@@ -1,0 +1,11 @@
+[Unit]
+Description=RL build time log saver (http://localhost:8765)
+
+[Service]
+ExecStart=/usr/bin/env python3 %h/.local/share/rl-timelog/saver.py
+Environment=RL_TIMELOG_DATA=%h/.local/share/rl-timelog/data
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

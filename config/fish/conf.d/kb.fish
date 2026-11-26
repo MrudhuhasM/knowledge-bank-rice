@@ -1,4 +1,4 @@
-# Knowledge Bank: shell setup (fish), readable on a light terminal
+# Paper & ink shell setup (fish), readable on a light terminal
 fish_add_path -g ~/.local/bin
 
 # Paper & ink syntax colours (global vars override any dark-theme universals)
@@ -32,6 +32,5 @@ set -gx FZF_DEFAULT_OPTS "--color=fg:#575279,bg:-1,hl:#bb625e,fg+:#575279,bg+:#f
 if status is-interactive
     set -g fish_greeting
     command -q starship; and starship init fish | source
-    alias notes kv
-    alias today kb-daily
+    alias rl rl-status
 end
