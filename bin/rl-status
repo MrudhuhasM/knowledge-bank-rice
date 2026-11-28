@@ -23,6 +23,9 @@ jq -r --arg mode "$mode" '
   def dur: (. / 60000 | round) as $m
     | if $m < 60 then "\($m)m" else "\($m / 60 | floor)h \($m % 60 | tostring | if length < 2 then "0" + . else . end)m" end;
   def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+  def pace: if . > 0.05 then "ahead by \(. * 10 | round / 10) ch." elif . < -0.05 then "behind by \(-. * 10 | round / 10) ch." else "on pace" end;
+  def course: if .course then "\nCourse: \(.course.done) of \(.course.total) · \(.course.diff | pace)"
+      + (if .course.finish then " · done ~\(.course.finish / 1000 | strflocaltime("%a %d %b %H:00"))" else " · finished" end) else "" end;
   def phase: if .phase then "Chapter \(.phase.id) — \(.phase.name) · \(.phase.done) of \(.phase.total) sections done" else "" end;
 
   if .ok != true then
@@ -48,7 +51,7 @@ jq -r --arg mode "$mode" '
        elif .next then "Next: \(.next.id) — \(.next.name)" else "No sections waiting" end) as $what
     | if $mode == "--waybar" then
         {text: $b.t, class: $b.c,
-         tooltip: ("\($what)\n\(phase)\nToday \(.todayMs | dur) · last 7 days \(.weekMs | dur)\n\nClick: open the time log" | esc)} | tojson
+         tooltip: ("\($what)\n\(phase)\nToday \(.todayMs | dur) · last 7 days \(.weekMs | dur)" + course + "\n\nClick: open the time log" | esc)} | tojson
       elif $mode == "--lock" then
         ((if .step then "\(.step.id) \(.step.name)" elif .next then "Next: \(.next.id) \(.next.name)" else "" end)
           + (if .todayMs > 0 then " · \(.todayMs | dur) today" else "" end)) | esc

@@ -86,7 +86,7 @@ const dlabel=t=>new Date(t).toLocaleDateString('en-GB',{weekday:'short',day:'num
 const when=t=>{const d=new Date(t+30*60000);d.setMinutes(0,0,0);return dlabel(d)+', ~'+pad(d.getHours())+':00';};
 const hm=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes());};
 const hrs=h=>{const m=Math.round(Math.abs(h)*60);return m<60?m+' min':Math.floor(m/60)+'h'+(m%60?' '+pad(m%60)+'m':'');};
-const days=d=>d<1.5?Math.round(d*24)+' hours':(Math.round(d*10)/10)+' days';
+const days=d=>{if(d<1.5){const h=Math.round(d*24);return h<1?'under an hour':h+(h===1?' hour':' hours');}return (Math.round(d*10)/10)+' days';};
 const one=x=>Math.round(x*10)/10;
 const paceTxt=()=>S.settings.hoursPerDay>=24?'the clock running continuously':hrs(S.settings.hoursPerDay)+' a day';
 function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),3500);}
@@ -132,7 +132,8 @@ function bookFinish(c,t){let end=0;const rows=S.books.map(b=>{end+=b.units.lengt
 /* ---------- render ---------- */
 const stat=(v,l,s)=>`<div class="stat"><b>${v}</b><span>${l}</span>${s?`<small>${s}</small>`:''}</div>`;
 function render(){if(!S)return;const t=now(),st=S.settings,n=N(),T=n*h();
-  const nav=`<nav><a href="/">Time log</a><a class="on" href="/coach">Course coach</a></nav>`;
+  // inside the time log window the frame has no nav of its own (the time log's sits above it)
+  const nav=window.self!==window.top?'':`<nav><a href="/">Time log</a><a class="on" href="/coach">Course coach</a></nav>`;
   const head=`<h1>The course: three books</h1><p class="sub">Raschka’s reasoning-model videos, then Lambert’s RLHF book, then Evals for AI Engineers: ${n} chapters at ${hrs(h())} each, ${hrs(T)} in all. The coach doesn’t time you. It compares what you’ve finished with where ${st.hoursPerDay>=24?'the clock, running continuously from the moment you start,':'a steady '+hrs(st.hoursPerDay)+' a day'} would have you by now, so pausing for other work is fine; only falling behind the pace shows.</p>`;
   let top;
   if(!S.start){
@@ -141,8 +142,8 @@ function render(){if(!S)return;const t=now(),st=S.settings,n=N(),T=n*h();
     const verdict=Math.abs(c.diff)<0.05?'On pace':(c.diff<0?'Behind by ':'Ahead by ')+one(Math.abs(c.diff))+' ch.';
     const say=c.k>=n?`Course finished. Well done.`
       :Math.abs(c.diff)<0.05?`You’re exactly where a steady pace would have you.`
-      :c.diff<0?`That’s ${hrs(-c.diff*h())} of study to catch up on. At your planned pace you’d now finish on <b>${dlabel(c.planFinish)}</b>, ${days((c.planFinish-target())/DAY)} after the original target.`
-      :`That’s ${hrs(c.diff*h())} in hand. Keep this up and you finish on <b>${dlabel(c.planFinish)}</b>, ${days((target()-c.planFinish)/DAY)} early.`;
+      :c.diff<0?`That’s ${hrs(-c.diff*h())} of study to catch up on. At your planned pace you’d now finish on <b>${when(c.planFinish)}</b>, ${days((c.planFinish-target())/DAY)} after the original target.`
+      :`That’s ${hrs(c.diff*h())} in hand. Keep this up and you finish on <b>${when(c.planFinish)}</b>, ${days((target()-c.planFinish)/DAY)} early.`;
     const next=c.k>=n?'':`<div class="next"><div class="lab">To be on pace by this time tomorrow (${dlabel(t+DAY)}, ${hm(t)})</div>${c.need<0.05?`<div class="say" style="font-size:19px">Nothing owed: you’re ahead of tomorrow’s mark already.</div>`:`<div class="say" style="font-size:19px">Finish ${one(c.need)} chapters (${hrs(c.need*h())}):</div><ol>${c.upto.slice(0,6).map(o=>`<li>${esc(label(o.x))} — ${esc(o.x.u.title)}${o.note?` <span class="note">(${o.note})</span>`:''}</li>`).join('')}</ol>${c.upto.length>6?`<p class="note">…then ${c.upto.length-6} more, through ${esc(label(c.upto[c.upto.length-1].x))}.</p>`:''}`}</div>`;
     top=`<div class="card"><div class="verdict"><div class="big ${cls}">${verdict}</div><div><div class="lab">${one(c.k)} of ${n} chapters done · started ${dlabel(S.start)}, ${hm(S.start)}</div><div class="say">${say}</div></div></div>${next}</div>
     <div class="btns"><button class="small" data-a="replan">Re-plan from today…</button><span class="note">Moves the start so today counts as on pace; the slip is kept in the history below.</span></div>`;}
@@ -183,16 +184,25 @@ function draw(){const s=document.getElementById('chart');if(!s||!S.start)return;
 let ro=null;function watch(){const s=document.getElementById('chart');if(!s)return;if(ro)ro.disconnect();ro=new ResizeObserver(draw);ro.observe(s);}
 
 /* ---------- outages: the page beats every 30 s; a gap of over 3 minutes is asked about ---------- */
-function beat(){if(!S||!S.start||off)return;lastBeat=now();
-  if(mode==='disk')fetch('/api/coach-beat',{method:'PUT'}).catch(()=>{});else try{localStorage.setItem(LSB,String(lastBeat));}catch(e){}}
+function beat(){if(!S||!S.start||off||mode==='disk')return;lastBeat=now();try{localStorage.setItem(LSB,String(lastBeat));}catch(e){}}
 setInterval(beat,30000);
-function offHTML(){const len=now()-off;return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="The coach was off"><h2>The coach was off for ${hrs(len/HR)}</h2><p>Last seen ${dlabel(off)}, ${hm(off)} — a power cut, the browser closing, or the laptop asleep.</p><div class="btns"><button class="pri" data-a="offout">Leave it out</button><button data-a="offin">Count it</button></div><p class="note">“Leave it out” pauses the course clock from ${hm(off)} until you click, so the outage doesn’t put you behind. “Count it” if you kept studying anyway.</p></div></div>`;}
+/* with the saver, outages (shutdowns, power cuts, suspends) come from its list */
+let offList=null,offFresh=null;
+function takeOutages(outs){if(!S||!S.start||off||!outs||!outs.length||done()>=N())return;
+  const seen=new Set(S.seenOut||[]),fresh=outs.filter(o=>!seen.has(o[0]));if(!fresh.length)return;
+  const rel=fresh.filter(o=>o[1]>S.start).map(o=>[Math.max(o[0],S.start),o[1]]);
+  if(!rel.length){S.seenOut=[...(S.seenOut||[]),...fresh.map(o=>o[0])].slice(-200);save();return;}
+  offList=rel;offFresh=fresh.map(o=>o[0]);off=rel[0][0];render();}
+async function pollOutages(){if(mode!=='disk'||off)return;try{const r=await fetch('/api/outages',{cache:'no-store'});if(r.ok)takeOutages((await r.json()).outages);}catch(e){}}
+setInterval(pollOutages,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollOutages();});
+function offHTML(){const L=offList||[[off,now()]],len=L.reduce((a,o,i)=>a+((i===L.length-1?now():o[1])-o[0]),0);return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="The laptop was off"><h2>${mode==='disk'?'The laptop was off':'The coach was off'} for ${hrs(len/HR)}</h2><p>From ${dlabel(off)}, ${hm(off)} — a power cut, a shutdown or the laptop asleep.</p><div class="btns"><button class="pri" data-a="offout">Leave it out</button><button data-a="offin">Count it</button></div><p class="note">“Leave it out” pauses the course clock from ${hm(off)} until you click, so the outage doesn’t put you behind. “Count it” if you kept studying anyway.</p></div></div>`;}
 
 /* ---------- actions ---------- */
 const find=(b,i)=>S.books.find(x=>x.id===b).units[+i];
 const A={
-  offout(){pauses().push([off,now()]);off=null;save();beat();toast('Outage left out: the clock paused for it');},
-  offin(){off=null;render();beat();},
+  offout(){const t=now(),L=offList||[[off,t]];L.forEach((o,i)=>pauses().push([o[0],i===L.length-1?t:o[1]]));
+    if(offFresh)S.seenOut=[...(S.seenOut||[]),...offFresh].slice(-200);off=null;offList=offFresh=null;save();beat();toast('Outage left out: the clock paused for it');},
+  offin(){if(offFresh)S.seenOut=[...(S.seenOut||[]),...offFresh].slice(-200);off=null;offList=offFresh=null;save();beat();},
   start(){S.start=now();save();setTimeout(beat,100);toast('Course started: the pace runs from now');},
   tick(el){const u=find(el.dataset.b,el.dataset.i);u.done=now();u.frac=0;save();},
   undo(el){const u=find(el.dataset.b,el.dataset.i);u.done=null;save();},
@@ -208,11 +218,12 @@ root.addEventListener('change',e=>{const el=e.target;
     const t=now(),before=S.start?expected(t):0;S.settings[el.id==='s-u'?'hoursPerUnit':'hoursPerDay']=v;if(S.start){S.start=t-before/rate()*DAY;S.pauses=[];}save();}});
 setInterval(()=>{if(!off&&!document.querySelector('select:focus,input:focus'))render();},60000);
 (async()=>{
-  if(/^https?:$/.test(location.protocol)){try{const r=await fetch('/api/coach',{cache:'no-store'});if(r.ok){const j=await r.json();mode='disk';S=j.state||null;lastBeat=j.beat||null;}}catch(e){}}
+  let outs=null;
+  if(/^https?:$/.test(location.protocol)){try{const r=await fetch('/api/coach',{cache:'no-store'});if(r.ok){const j=await r.json();mode='disk';S=j.state||null;outs=j.outages||[];}}catch(e){}}
   if(!S){try{S=JSON.parse(localStorage.getItem(LS)||'null');lastBeat=+localStorage.getItem(LSB)||null;}catch(e){}}
   if(!S)S=JSON.parse(JSON.stringify(SEED));
   pauses();
-  if(S.start&&lastBeat&&lastBeat>=S.start&&now()-lastBeat>3*60000&&done()<N())off=lastBeat;
-  render();beat();
+  if(mode!=='disk'&&S.start&&lastBeat&&lastBeat>=S.start&&now()-lastBeat>3*60000&&done()<N())off=lastBeat;
+  render();beat();if(mode==='disk')takeOutages(outs);
 })();
 }</script></body></html>

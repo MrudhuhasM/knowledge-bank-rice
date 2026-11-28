@@ -9,7 +9,8 @@ Serves the time log page at http://localhost:8765 and keeps its data on disk.
   PUT  /api/coach-beat "the coach page is still open" (lets it leave outages out)
   GET  /api/state     everything the page stores, plus the last heartbeat
   PUT  /api/state     save (refused with 409 if a newer save is already on disk)
-  PUT  /api/beat      "the page is still open" (lets it notice power cuts)
+  GET  /api/outages   when the laptop was off (shutdown, power cut, suspend)
+  PUT  /api/beat      "the page is still open" (used only when opened without the saver)
   GET  /api/summary   a small digest for the bar, the desktop and the lock screen
   PUT  /api/import    {"url": ...}: clone or pull a git repo of phase steps and
                       return the text of every .txt/.md file in its steps/ folder
@@ -18,6 +19,13 @@ Serves the time log page at http://localhost:8765 and keeps its data on disk.
 Every write goes to a temp file, is fsync'd and renamed into place, so a power
 cut leaves the old or the new file, never half of one. One copy per day is kept
 in data/backups/ for 30 days.
+
+It also notices when the laptop was off. While it runs it writes data/alive every 20
+seconds; when it starts (after a shutdown or power cut) or wakes (after a suspend) and
+the last write is over 3 minutes old, it records that stretch in data/outages.json. Both
+pages read that list and ask whether to leave the outage out. That's more reliable than
+the pages watching themselves: switching between the time log and the coach, or closing
+the window, isn't an outage.
 
 It also sends the desktop notifications: "time for a break" after the work
 interval set in the page, and "break's over" when a timed break runs out. They
@@ -42,6 +50,8 @@ STATE = os.path.join(DATA, "state.json")
 BEAT = os.path.join(DATA, "heartbeat")
 COACH = os.path.join(DATA, "coach.json")
 COACH_BEAT = os.path.join(DATA, "coach-heartbeat")
+ALIVE = os.path.join(DATA, "alive")
+OUTAGES = os.path.join(DATA, "outages.json")
 BACKUPS = os.path.join(DATA, "backups")
 PORT = int(os.environ.get("RL_TIMELOG_PORT", "8765"))
 KEEP_DAYS = 30
@@ -92,6 +102,36 @@ def read_beat(path=BEAT):
             return int(f.read().strip())
     except (OSError, ValueError):
         return None
+
+
+# ── outages: shutdowns, power cuts, suspends ────────────────────────
+def read_outages():
+    try:
+        out = read_json(OUTAGES)
+        return out if isinstance(out, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def record_outage(start, end):
+    out = read_outages()
+    out.append([start, end])
+    atomic_write(OUTAGES, json.dumps(out[-50:]).encode())
+
+
+def keep_alive(last):
+    """Write data/alive every 20 s; a gap over 3 minutes (a suspend) is an outage."""
+    while True:
+        time.sleep(20)
+        now = int(time.time() * 1000)
+        try:
+            with LOCK:
+                if last and now - last > 3 * MIN:
+                    record_outage(last, now)
+                atomic_write(ALIVE, str(now).encode())
+            last = now
+        except OSError as e:
+            print("alive:", e, flush=True)
 
 
 def daily_copy(data: bytes):
@@ -242,6 +282,29 @@ def import_steps(url):
     return {"ok": True, "commit": commit, "files": sorted(files), "text": "\n".join(parts)}
 
 
+# ── the course coach, in brief ──────────────────────────────────────
+def course_summary(C, t):
+    """Where the three-book course stands against its pace (same maths as coach.html)."""
+    if not isinstance(C, dict) or not C.get("start") or not isinstance(C.get("books"), list):
+        return None
+    units = [u for b in C["books"] for u in b.get("units", [])]
+    n = len(units)
+    if not n:
+        return None
+    k = sum(1 if u.get("done") else (u.get("frac") or 0) for u in units)
+    st = C.get("settings") or {}
+    rate = (st.get("hoursPerDay") or 24) / (st.get("hoursPerUnit") or 1.5)  # chapters per day
+    start = C["start"]
+    paused = sum(max(0, min(p[1], t) - max(p[0], start)) for p in (C.get("pauses") or []))
+    expected = min(n, max(0, t - start - paused) / DAY * rate)
+    cur = next(((b, i, u) for b in C["books"] for i, u in enumerate(b.get("units", [])) if not u.get("done")), None)
+    return {
+        "done": round(k, 2), "total": n, "diff": round(k - expected, 2),
+        "finish": t + (n - k) / rate * DAY if k < n else None,
+        "current": {"book": cur[0].get("title", ""), "n": cur[1] + 1, "title": cur[2].get("title", "")} if cur else None,
+    }
+
+
 # ── desktop notifications ───────────────────────────────────────────
 def notify(summary, body, urgency="normal", replace=None):
     if not shutil.which("notify-send"):
@@ -267,16 +330,34 @@ def dur(ms):
 
 
 def notifier():
-    remind_id = over_id = None
+    remind_id = over_id = course_id = None
     last_remind = 0
     over_for = None
+    behind_level = 0  # whole chapters behind already announced
     while True:
         time.sleep(15)
         try:
             with LOCK:
                 S = read_state()
+                try:
+                    C = read_json(COACH)
+                except (OSError, ValueError):
+                    C = None
             now = int(time.time() * 1000)
             s = summarize(S, now)
+            # Course: say so once per extra whole chapter behind, with the new finish.
+            c = course_summary(C, now)
+            level = int(-c["diff"]) if c and c["finish"] and c["diff"] <= -1 else 0
+            if level > behind_level:
+                when_ = datetime.datetime.fromtimestamp(c["finish"] / 1000).strftime("%a %d %b, around %H:00")
+                course_id = notify(f"Course: {-c['diff']:.1f} chapters behind",
+                                   f"At the planned pace you now finish {when_}. "
+                                   f"Next up: {c['current']['title']}." if c.get("current") else "",
+                                   replace=course_id)
+            if level < behind_level and level == 0 and course_id:
+                dismiss(course_id)
+                course_id = None
+            behind_level = level
             if s.get("due"):
                 if now - last_remind >= 10 * MIN:
                     step = s["step"]
@@ -339,15 +420,27 @@ class Handler(BaseHTTPRequestHandler):
                 except (OSError, ValueError):
                     coach = None
                 beat = read_beat(COACH_BEAT)
-            return self.reply(200, json.dumps({"state": coach, "beat": beat}).encode())
+                outs = read_outages()
+            return self.reply(200, json.dumps({"state": coach, "beat": beat, "outages": outs}).encode())
         if path == "/api/state":
             with LOCK:
-                body = json.dumps({"state": read_state(), "beat": read_beat()})
+                body = json.dumps({"state": read_state(), "beat": read_beat(), "outages": read_outages()})
             return self.reply(200, body.encode())
+        if path == "/api/outages":
+            with LOCK:
+                outs = read_outages()
+            return self.reply(200, json.dumps({"outages": outs}).encode())
         if path == "/api/summary":
             with LOCK:
                 S = read_state()
-            return self.reply(200, json.dumps(summarize(S, int(time.time() * 1000))).encode())
+                try:
+                    C = read_json(COACH)
+                except (OSError, ValueError):
+                    C = None
+            now = int(time.time() * 1000)
+            out = summarize(S, now)
+            out["course"] = course_summary(C, now)
+            return self.reply(200, json.dumps(out).encode())
         self.reply(404)
 
     def do_PUT(self):
@@ -409,6 +502,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # Record a shutdown or power cut before serving, so the first page load sees it.
+    started = int(time.time() * 1000)
+    previous = read_beat(ALIVE)
+    if previous and started - previous > 3 * MIN:
+        record_outage(previous, started)
+    atomic_write(ALIVE, str(started).encode())
+    threading.Thread(target=keep_alive, args=(started,), daemon=True).start()
     threading.Thread(target=notifier, daemon=True).start()
     print(f"RL time log on http://localhost:{PORT}  (data in {DATA})", flush=True)
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

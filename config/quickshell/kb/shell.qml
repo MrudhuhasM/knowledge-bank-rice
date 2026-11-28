@@ -12,6 +12,7 @@
 //   │ Batched generation with padding                    │
 //   │ 42m on this section · 18m since your last break    │
 //   │ ●●○○○  2 of 5 sections     today 1h 20m · 7 days … │
+//   │ COURSE · 5.5 OF 37 · ON PACE · DONE ~MON 30 NOV, 11:00 │
 //   └────────────────────────────────────────────────────┘
 //
 //   (next to the clock, quiet) a small month with your work days · the weather
@@ -417,6 +418,22 @@ ShellRoot {
                                         }
                                     }
                                 }
+                            }
+
+                            // the three-book course, from the coach
+                            Text {
+                                readonly property var c: sheet.r.course || null
+                                visible: c !== null
+                                width: parent.width
+                                elide: Text.ElideRight
+                                color: c && c.diff < -0.05 ? root.love : root.subtle
+                                font.family: root.mono
+                                font.pixelSize: 11
+                                font.letterSpacing: 1.3
+                                text: !c ? "" : ("course · " + c.done + " of " + c.total + " · "
+                                      + (c.diff > 0.05 ? "ahead by " + c.diff.toFixed(1) + " ch."
+                                         : c.diff < -0.05 ? "behind by " + (-c.diff).toFixed(1) + " ch." : "on pace")
+                                      + (c.finish ? " · done ~" + Qt.formatDateTime(new Date(c.finish), "ddd d MMM, HH:00") : " · finished")).toUpperCase()
                             }
                         }
                         MouseArea {
