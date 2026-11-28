@@ -31,6 +31,9 @@ h3{font-size:21px;margin:0}
 .stat b{display:block;font-family:var(--serif);font-weight:400;font-size:clamp(26px,3.6vw,32px);line-height:1.2;white-space:nowrap}
 .stat span{color:var(--grey);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
 .stat small{display:block;color:var(--grey);font-size:13px;margin-top:2px}
+.fin{width:100%;border-collapse:collapse;margin:18px 0 4px}
+.fin th{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);font-weight:400;padding:6px 8px;border-bottom:1px solid var(--line)}
+.fin td{padding:9px 8px;border-bottom:1px solid var(--fold)}.fin .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .fig{position:relative;height:300px;margin-top:10px}.fig svg{position:absolute;inset:0;width:100%;height:100%}
 .legend{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:14px;color:var(--grey);margin-top:6px}
 .legend i{display:inline-block;width:22px;height:0;border-top:2px solid var(--grey);vertical-align:middle;margin-right:6px}
@@ -54,7 +57,7 @@ input.num{width:5.2em}
 .note{color:var(--grey);font-size:14px;margin:6px 0}
 .set{line-height:2.5}
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--card);padding:10px 18px;border-radius:12px;font-size:14px;z-index:10}
-@media(max-width:600px){.card{padding:18px 18px 18px 30px}.u{grid-template-columns:34px minmax(0,1fr)}.u .r{grid-column:2}}
+@media(max-width:600px){.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:2px 0;padding-inline-start:8em;text-align:start!important}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;color:var(--grey)}.card{padding:18px 18px 18px 30px}.u{grid-template-columns:34px minmax(0,1fr)}.u .r{grid-column:2}}
 </style></head><body><div id="root"></div>
 <script>{
 const LS='rl-coach-v1',DAY=864e5,HR=36e5;
@@ -77,6 +80,7 @@ const root=document.getElementById('root');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const now=()=>Date.now(),pad=n=>String(n).padStart(2,'0');
 const dlabel=t=>new Date(t).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+const when=t=>{const d=new Date(t+30*60000);d.setMinutes(0,0,0);return dlabel(d)+', ~'+pad(d.getHours())+':00';};
 const hm=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes());};
 const hrs=h=>{const m=Math.round(Math.abs(h)*60);return m<60?m+' min':Math.floor(m/60)+'h'+(m%60?' '+pad(m%60)+'m':'');};
 const days=d=>d<1.5?Math.round(d*24)+' hours':(Math.round(d*10)/10)+' days';
@@ -112,6 +116,12 @@ async function save(){S.rev=(S.rev||0)+1;render();const snap=JSON.stringify(S);
     if(r.status===409){const j=await r.json();if(j.state){S=j.state;render();}}else if(!r.ok)throw 0;}
   catch(e){toast('Couldn’t reach the saver; kept in this browser for now');}}
 
+/* ---------- when each book is finished, at both paces ---------- */
+function bookFinish(c,t){let end=0;const rows=S.books.map(b=>{end+=b.units.length;const owed=end-c.k;const dn=b.units.every(u=>u.done);
+    const plan=owed>0?t+owed/rate()*DAY:null,real=owed>0&&c.realRate?t+owed/c.realRate*DAY:null;
+    return `<tr><td data-l="Book">${esc(b.title)}</td><td class="n" data-l="Planned pace">${dn?'done '+dlabel(Math.max(...b.units.map(u=>u.done))):plan?when(plan):'—'}</td><td class="n" data-l="Real pace">${dn?'':real?when(real):'—'}</td></tr>`;}).join('');
+  return `<table class="fin stack"><thead><tr><th>Book finished</th><th class="n">at planned pace</th><th class="n">at your real pace</th></tr></thead><tbody>${rows}</tbody></table>`;}
+
 /* ---------- render ---------- */
 const stat=(v,l,s)=>`<div class="stat"><b>${v}</b><span>${l}</span>${s?`<small>${s}</small>`:''}</div>`;
 function render(){if(!S)return;const t=now(),st=S.settings,n=N(),T=n*h();
@@ -132,11 +142,11 @@ function render(){if(!S)return;const t=now(),st=S.settings,n=N(),T=n*h();
   let est='';
   if(S.start){const c=coach(t);
     est=`<div class="band"><h2>Finish estimates</h2><div class="stats">
-      ${stat(dlabel(target()),'original target',`${days(n/rate())} at ${hrs(st.hoursPerDay)} a day`)}
-      ${stat(c.k>=n?'done':dlabel(c.planFinish),'at your planned pace from here',`${hrs(c.left*h())} left`)}
-      ${stat(c.realFinish?dlabel(c.realFinish):'—','at your real pace so far',c.realRate?`${one(c.realRate)} chapters a day (${hrs(c.realRate*h())} a day)`:'shown after your first full day')}
+      ${stat(when(target()),'original target',`${days(n/rate())} at ${hrs(st.hoursPerDay)} a day`)}
+      ${stat(c.k>=n?'done':when(c.planFinish),'at your planned pace from here',`${hrs(c.left*h())} left`)}
+      ${stat(c.realFinish?when(c.realFinish):'—','at your real pace so far',c.realRate?`${one(c.realRate)} chapters a day (${hrs(c.realRate*h())} a day)`:'shown after your first full day')}
       ${stat(one(c.e)+' ch.','where steady pace has you now',`you’re at ${one(c.k)}`)}
-    </div><div class="fig"><svg id="chart" role="img" aria-label="Chapters done over time against the planned pace"></svg></div>
+    </div>${bookFinish(c,t)}<div class="fig"><svg id="chart" role="img" aria-label="Chapters done over time against the planned pace"></svg></div>
     <div class="legend"><span><i></i>planned pace</span><span class="a"><i></i>chapters done</span><span class="p"><i></i>your real pace, projected</span></div></div>`;}
   const books=S.books.map(b=>{const dn=b.units.reduce((a,u)=>a+(u.done?1:u.frac||0),0),cur=coach(now()).cur;
     return `<div class="book"><div class="bhead"><h3>${esc(b.title)}</h3><span class="lab">${esc(b.author)} · ${esc(b.how)} · ${one(dn)} of ${b.units.length}</span></div><div class="bar"><i style="width:${(dn/b.units.length*100).toFixed(1)}%"></i></div>

@@ -57,7 +57,8 @@ steps/chapter-1.txt
 
 - how far ahead or behind you are, in chapters and hours
 - exactly which chapters bring you back on pace by this time tomorrow
-- three finish dates: the original target, the date at your planned pace from here, and the date at your real pace so far
+- three finish dates with an approximate time: the original target, the date at your planned pace from here, and the date at your real pace so far
+- when each book will be finished, at both paces
 
 **Re-plan from today** resets the pace to where you are and keeps the slip in a history. The daily pace and the hours per chapter are in its Settings.
 
