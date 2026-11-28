@@ -4,6 +4,8 @@
 Serves the time log page at http://localhost:8765 and keeps its data on disk.
 
   GET  /              the page
+  GET  /coach         the course coach page (three books against a steady pace)
+  GET/PUT /api/coach  the coach's data, stored and guarded like /api/state
   GET  /api/state     everything the page stores, plus the last heartbeat
   PUT  /api/state     save (refused with 409 if a newer save is already on disk)
   PUT  /api/beat      "the page is still open" (lets it notice power cuts)
@@ -33,9 +35,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "rl-time-log.html")
+COACH_PAGE = os.path.join(HERE, "coach.html")
 DATA = os.path.expanduser(os.environ.get("RL_TIMELOG_DATA", os.path.join(HERE, "data")))
 STATE = os.path.join(DATA, "state.json")
 BEAT = os.path.join(DATA, "heartbeat")
+COACH = os.path.join(DATA, "coach.json")
 BACKUPS = os.path.join(DATA, "backups")
 PORT = int(os.environ.get("RL_TIMELOG_PORT", "8765"))
 KEEP_DAYS = 30
@@ -323,9 +327,16 @@ class Handler(BaseHTTPRequestHandler):
         if not self.local_only():
             return
         path = self.path.split("?")[0]
-        if path in ("/", "/index.html"):
-            with open(PAGE, "rb") as f:
+        if path in ("/", "/index.html", "/coach", "/coach.html"):
+            with open(COACH_PAGE if path.startswith("/coach") else PAGE, "rb") as f:
                 return self.reply(200, f.read(), "text/html; charset=utf-8")
+        if path == "/api/coach":
+            with LOCK:
+                try:
+                    coach = read_json(COACH)
+                except (OSError, ValueError):
+                    coach = None
+            return self.reply(200, json.dumps({"state": coach}).encode())
         if path == "/api/state":
             with LOCK:
                 body = json.dumps({"state": read_state(), "beat": read_beat()})
@@ -351,6 +362,22 @@ class Handler(BaseHTTPRequestHandler):
             except subprocess.TimeoutExpired:
                 res = {"ok": False, "error": "git took too long (no network?)"}
             return self.reply(200 if res["ok"] else 400, json.dumps(res).encode())
+        if path == "/api/coach":
+            try:
+                new = json.loads(body)
+            except ValueError:
+                return self.reply(400, b'{"error":"not JSON"}')
+            if not isinstance(new, dict) or not isinstance(new.get("books"), list):
+                return self.reply(400, b'{"error":"not coach data"}')
+            with LOCK:
+                try:
+                    old = read_json(COACH)
+                except (OSError, ValueError):
+                    old = None
+                if old and new.get("rev", 0) <= old.get("rev", 0):
+                    return self.reply(409, json.dumps({"state": old}).encode())
+                atomic_write(COACH, json.dumps(new, ensure_ascii=False, indent=1).encode())
+            return self.reply(200)
         if path == "/api/beat":
             with LOCK:
                 atomic_write(BEAT, str(int(time.time() * 1000)).encode())

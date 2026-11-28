@@ -53,6 +53,14 @@ steps/chapter-1.txt
 
 **Starting over:** **Start over…** (under "Your data") downloads a backup, then clears every section and time and loads the book's Chapter 0. Settings and the repo URL are kept.
 
+**The course coach** (`http://localhost:8765/coach`, linked at the top of the time log): Raschka's reasoning-model videos, Lambert's RLHF book and *Evals for AI Engineers*, 37 chapters at 1.5 hours each. It never times you. It compares the chapters you've ticked (plus "% through" for the one you're in) with where a steady daily pace would have you by now, then shows:
+
+- how far ahead or behind you are, in chapters and hours
+- exactly which chapters bring you back on pace by this time tomorrow
+- three finish dates: the original target, the date at your planned pace from here, and the date at your real pace so far
+
+**Re-plan from today** resets the pace to where you are and keeps the slip in a history. The daily pace and the hours per chapter are in its Settings.
+
 **Backups:** the saver keeps a copy per day for 30 days in `~/.local/share/rl-timelog/data/backups/`. **Download backup** in the page saves a JSON file you can keep elsewhere; **Restore from backup** loads one.
 
 **In a terminal:** `rl-status` prints the current section; `rl-status --json` prints the full summary; `systemctl --user status rl-timelog` checks the saver.
