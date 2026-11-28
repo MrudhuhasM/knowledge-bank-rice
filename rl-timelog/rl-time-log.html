@@ -82,7 +82,9 @@ code{font-family:var(--mono);font-size:13px;overflow-wrap:anywhere}
 @media(prefers-reduced-motion:no-preference){.run .dot{animation:blink 2s infinite}.over .clock{animation:blink 1s infinite}}
 @keyframes blink{50%{opacity:.3}}
 @media(max-width:600px){.now{grid-template-columns:1fr;padding:18px 18px 18px 30px}table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:7em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:6.5em;margin-inline-start:-7em;color:var(--grey);font-weight:400}.stack td:empty{display:none}td.act{text-align:start}.days .row{grid-template-columns:5.8em minmax(0,1fr) 4.4em}.brow{grid-template-columns:1fr}.sep{display:none}}
-</style></head><body><div id="root"></div>
+#bar{padding:clamp(18px,3vw,32px) max(5vw,16px) 0;max-width:1240px;margin:0 auto}#bar nav.top{margin:0}
+#coachf{display:block;width:100%;height:calc(100vh - 56px);border:0}
+</style></head><body><div id="bar"><nav class="top"><a id="v-log" class="on" href="#log">Time log</a><a id="v-coach" href="#coach">Course coach</a></nav></div><div id="root"></div><iframe id="coachf" title="Course coach" hidden></iframe>
 <script>{
 const LS='rl-timelog-local-v1',LSB='rl-timelog-beat',MIN=6e4,HR=36e5,DAY=864e5;
 const SEED={rev:0,active:null,brk:null,lastBackup:null,settings:{work:50,rest:10},phases:[
@@ -178,8 +180,18 @@ async function persist(){const snap=JSON.stringify(S);
     else if(!r.ok)throw new Error(r.status);
     else if(!diskOk){diskOk=true;render();}}
   catch(e){diskOk=false;render();toast('Couldn’t reach the saver. Is it running?');}}
-function beat(force){if(rec||!S)return;if(!force&&!(S.active||S.brk))return;lastBeat=now();
-  if(mode==='disk')fetch('/api/beat',{method:'PUT'}).catch(()=>{});else try{localStorage.setItem(LSB,String(lastBeat));}catch(e){}}
+function beat(force){if(rec||!S||mode==='disk')return;if(!force&&!(S.active||S.brk))return;lastBeat=now();
+  try{localStorage.setItem(LSB,String(lastBeat));}catch(e){}}
+/* outages from the saver (shutdowns, power cuts, suspends) that touch the running section or break */
+function takeOutages(outs){if(!S||rec||!outs||!outs.length)return false;
+  const seen=new Set(S.seenOut||[]),fresh=outs.filter(o=>!seen.has(o[0]));if(!fresh.length)return false;
+  const markSeen=()=>{S.seenOut=[...(S.seenOut||[]),...fresh.map(o=>o[0])].slice(-200);};
+  const cur=S.active&&find(S.active);let changed=false;
+  if(S.brk){const b=fresh.filter(o=>o[1]>S.brk.s);if(b.length){closeBreak(Math.max(S.brk.s,b[0][0]));needArm=false;changed=true;}}
+  const rel=cur?fresh.filter(o=>o[1]>cur.start).map(o=>[Math.max(o[0],cur.start),o[1]]):[];
+  if(rel.length){rec={id:cur.id,from:rel[0][0],list:rel,fresh:fresh.map(o=>o[0])};render();return true;}
+  markSeen();save();return changed;}
+async function pollOutages(){if(mode!=='disk'||rec)return;try{const r=await fetch('/api/outages',{cache:'no-store'});if(r.ok)takeOutages((await r.json()).outages);}catch(e){}}
 function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),3500);}
 function download(){const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);a.download='rl-timelog-backup-'+dkey(now())+'.json';document.body.appendChild(a);a.click();a.remove();
@@ -258,7 +270,7 @@ function render(){
     :`<p class="note">Saved in this browser only — opened as a plain file, without the saver. Open http://localhost:8765 instead. ${lb?'Last backup: '+when(lb)+'.':'No backup yet.'}</p>${stale?'<p class="warn">Download a backup — it’s been over a week, or you’ve never made one.</p>':''}`;
   const sel=(id,vals,cur,lab)=>`<select id="${id}" aria-label="${lab}">${vals.map(v=>`<option value="${v[0]}"${+cur===v[0]?' selected':''}>${v[1]}</option>`).join('')}</select>`;
   const reminder=`<p class="setl">Remind me to take a break after ${sel('s-work',[[25,'25 min'],[50,'50 min'],[90,'90 min'],[0,'never']],S.settings.work,'Work time before a break reminder')} of unbroken work, and suggest ${sel('s-rest',[[5,'5 min'],[10,'10 min'],[15,'15 min']],S.settings.rest,'Suggested break length')} breaks.</p>`;
-  root.innerHTML=`<div class="band"><nav class="top"><a class="on" href="/">Time log</a><a href="/coach">Course coach</a></nav><h1>RL build, time log</h1><p class="sub">Start a section when you sit down to it, take a break when you step away, tick it when it passes review. The page reads the clock; everything below comes from those clicks.</p>${boardHTML(t)}</div>
+  root.innerHTML=`<div class="band"><h1>RL build, time log</h1><p class="sub">Start a section when you sit down to it, take a break when you step away, tick it when it passes review. The page reads the clock; everything below comes from those clicks.</p>${boardHTML(t)}</div>
   <div class="band"><h2>How it’s going</h2><div class="stats">${stat(dur(st.today),'worked today','today')}${stat(dur(st.week),'worked in the last 7 days')}${stat(st.focus==null?'—':Math.round(st.focus*100)+'%','focus: work ÷ (work + breaks)')}${stat(st.bc?st.bc+' · '+dur(st.bt/st.bc):'—','breaks · average length')}${stat(st.pc?dur(st.over):'—','timed breaks ran over by, in total')}${stat(st.longest?dur(st.longest):'—','longest unbroken stretch')}${stat(st.n?dur(st.med):'—','typical section (median)')}</div>${proj}<p class="note">Breaks are your timed and untimed pauses plus gaps between sections, if under 3 hours on the same day. Anything longer counts as stopping for the day. Time the page wasn’t running (power cuts) is left out of everything.</p></div>
   <div class="band"><h2>Last 14 days</h2><div class="days">${dayRows}</div></div>
   <div class="band"><h2>Chapters and sections</h2>${phases}</div>
@@ -266,7 +278,7 @@ function render(){
   ${mode==='disk'?`<h3>Or import from GitHub</h3><p class="note">Every <code>.txt</code> or <code>.md</code> file in the repo’s <code>steps/</code> folder, in the same format. The saver pulls the repo each time.</p><div class="add"><input id="repo" value="${esc(S.settings.stepsRepo||'')}" placeholder="https://github.com/you/rl-build-steps" aria-label="Steps repo clone URL"><button class="pri" data-a="gh">Import from GitHub</button></div>${S.settings.lastImport?`<p class="note">Last import ${when(S.settings.lastImport.at)}, commit ${esc(S.settings.lastImport.commit)}, ${S.settings.lastImport.files} files.</p>`:''}`:''}</div>
   <div><h3>Break reminder</h3>${reminder}<div class="btns"><button class="small" data-a="test">Test the sounds</button></div><h3>Your data</h3>${keep}<div class="btns"><button class="small" data-a="backup">Download backup</button><button class="small" data-a="pick">Restore from backup…</button><button class="small" data-a="reset">Start over…</button><input type="file" id="file" accept=".json,application/json" hidden></div></div></div></div>${ed?modal():''}${rec?recHTML():''}`;
 }
-function recHTML(){return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="The page was off"><h2>The page was off for ${dur(now()-rec.from)}</h2><p>Last seen ${when(rec.from)}, while <b>${esc(rec.id)}</b> was running — a power cut, the browser closing, or the laptop asleep.</p><div class="btns"><button class="pri" data-a="recoff">Leave that time out</button><button data-a="recwork">I was working anyway</button></div><p class="note">“Leave it out” pauses the section from ${hm(rec.from)} until you click, and doesn’t count it as a break either.</p></div></div>`;}
+function recHTML(){return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="The page was off"><h2>${mode==='disk'?'The laptop was off':'The page was off'} for ${dur((rec.list?rec.list.reduce((a,o,i,L)=>a+((i===L.length-1?now():o[1])-o[0]),0):now()-rec.from))}</h2><p>From ${when(rec.from)}, while <b>${esc(rec.id)}</b> was running — a power cut, a shutdown or the laptop asleep.</p><div class="btns"><button class="pri" data-a="recoff">Leave that time out</button><button data-a="recwork">I was working anyway</button></div><p class="note">“Leave it out” pauses the section from ${hm(rec.from)} until you click, and doesn’t count it as a break either.</p></div></div>`;}
 function modal(){const d=ed.d;
   const br=d.breaks.map((b,i)=>`<div class="brow"><input type="datetime-local" data-bs="${i}" value="${toInput(b[0])}" aria-label="Break ${i+1} start"><input type="datetime-local" data-be="${i}" value="${toInput(b[1])}" aria-label="Break ${i+1} end"><button class="small" data-a="rmb" data-i="${i}">Remove</button></div>${b[3]==='off'?'<p class="note">Page was off (left out of stats)</p>':''}`).join('');
   return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="Edit step ${esc(ed.id)}"><h2>Edit ${esc(ed.id)}</h2>
@@ -309,8 +321,10 @@ const A={
     download();disarm();const keep=S.settings,r=S.rev||0;S=JSON.parse(JSON.stringify(SEED));S.settings=keep;S.rev=r;S.lastBackup=now();save();toast('Started over from Chapter 0');},
   pick(){document.getElementById('file').click();},
   test(){chime();setTimeout(()=>{armAlarm(now());setTimeout(disarm,1500);},1300);},
-  recoff(){const s=find(rec.id);if(s)(s.breaks=s.breaks||[]).push([rec.from,now(),0,'off']);rec=null;save();},
-  recwork(){rec=null;save();},
+  recoff(){const s=find(rec.id),t=now(),L=rec.list||[[rec.from,t]];
+    if(s){s.breaks=s.breaks||[];L.forEach((o,i)=>s.breaks.push([o[0],i===L.length-1?t:o[1],0,'off']));}
+    if(rec.fresh)S.seenOut=[...(S.seenOut||[]),...rec.fresh].slice(-200);rec=null;save();},
+  recwork(){if(rec.fresh)S.seenOut=[...(S.seenOut||[]),...rec.fresh].slice(-200);rec=null;save();},
   edit(id){const s=find(id);if(!s)return;ed={id,d:{name:s.name,start:s.start||null,end:s.end||null,breaks:(s.breaks||[]).map(b=>[b[0],b[1],b[2]||0,b[3]||''])}};render();},
   addb(){readEd();ed.d.breaks.push([null,null,0,'']);render();},
   rmb(_,el){readEd();ed.d.breaks.splice(+el.dataset.i,1);render();},
@@ -336,6 +350,12 @@ root.addEventListener('change',e=>{const id=e.target.id;
 document.addEventListener('pointerdown',()=>{unlock();if(needArm&&S&&S.brk&&S.brk.plan){const end=S.brk.s+S.brk.plan;needArm=false;if(end>now())armAlarm(end);const w=document.querySelector('.now .warn');if(w)w.remove();}},true);
 window.addEventListener('storage',e=>{if(mode==='browser'&&e.key===LS&&e.newValue){try{S=JSON.parse(e.newValue);render();}catch(x){}}});
 setInterval(()=>beat(),30000);
+/* views: the coach loads once into the frame and stays loaded; switching never reloads either page */
+function view(){const c=location.hash==='#coach',f=document.getElementById('coachf');
+  if(c&&!f.src)f.src='/coach';f.hidden=!c;root.hidden=c;
+  document.getElementById('v-log').className=c?'':'on';document.getElementById('v-coach').className=c?'on':'';}
+window.addEventListener('hashchange',view);view();
+setInterval(pollOutages,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollOutages();});
 setInterval(()=>{if(!S||rec)return;const t=now(),c=document.getElementById('clock');
   if(S.brk){const b=S.brk,end=b.plan?b.s+b.plan:null,over=!!end&&t>=end;
     if(over!==wasOver){wasOver=over;if(!ed)render();}
@@ -349,15 +369,18 @@ setInterval(()=>{if(!S||rec)return;const t=now(),c=document.getElementById('cloc
   const td=document.getElementById('today');if(td)td.textContent=dur(stats(t).today);},1000);
 
 (async()=>{
-  if(/^https?:$/.test(location.protocol)){try{const r=await fetch('/api/state',{cache:'no-store'});if(r.ok){const j=await r.json();mode='disk';S=j.state||null;lastBeat=j.beat||null;}}catch(e){}}
+  let outs=null;
+  if(/^https?:$/.test(location.protocol)){try{const r=await fetch('/api/state',{cache:'no-store'});if(r.ok){const j=await r.json();mode='disk';S=j.state||null;outs=j.outages||[];}}catch(e){}}
   if(mode==='browser'){try{S=JSON.parse(localStorage.getItem(LS)||'null');lastBeat=+localStorage.getItem(LSB)||null;}catch(e){mode='none';}}
   if(!S)S=JSON.parse(JSON.stringify(SEED));
   S.settings=S.settings||{work:50,rest:10};
   if(typeof S.brk==='number')S.brk={s:S.brk,plan:0,step:S.active};
   if(S.brk&&S.brk.plan)needArm=true;
-  const t=now(),cur=S.active&&find(S.active),gap=lastBeat&&t-lastBeat>3*MIN;
-  if(gap&&S.brk&&lastBeat>=S.brk.s){closeBreak(lastBeat);needArm=false;if(!cur){render();save();return;}}
-  if(gap&&cur&&!S.brk&&lastBeat>=cur.start)rec={from:lastBeat,id:cur.id};
+  const t=now(),cur=S.active&&find(S.active);
+  if(mode==='disk'){if(takeOutages(outs)&&!rec)return;}
+  else{const gap=lastBeat&&t-lastBeat>3*MIN;
+    if(gap&&S.brk&&lastBeat>=S.brk.s){closeBreak(lastBeat);needArm=false;if(!cur){render();save();return;}}
+    if(gap&&cur&&!S.brk&&lastBeat>=cur.start)rec={from:lastBeat,id:cur.id};}
   if(needArm&&S.brk){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume().then(()=>{if(needArm&&S.brk&&S.brk.plan&&ac.state==='running'){needArm=false;armAlarm(S.brk.s+S.brk.plan);if(!ed&&!rec)render();}});}catch(e){}}
   render();beat();
 })();

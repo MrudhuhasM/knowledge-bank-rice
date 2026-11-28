@@ -9,10 +9,10 @@ take a break, and shows how the build is going.
 
 - **The time log** opens by itself at login, in its own window on workspace 1 (LOG). Start a section, tick it when it passes review, take timed breaks (5/15/30 min or your own) with an alarm that keeps beeping until you're back. It shows work today and this week, your focus ratio, break overruns, your longest unbroken stretch, a 14-day chart and a finish estimate.
 - **Break reminders:** after 50 minutes of unbroken work (25, 50, 90 or off, set in the page) a chime plays and a notification asks you to take a break; it asks again every 10 minutes until you do. "Break's over" is a notification that stays until you're back.
-- **Safe on a laptop with no battery:** every click is written to disk at once (`~/.local/share/rl-timelog/data/state.json`, plus a dated copy per day for 30 days). After a power cut the page sees how long it was off and asks whether to leave that time out, so outages never count as work or as breaks.
+- **Safe on a laptop with no battery:** every click is written to disk at once (`~/.local/share/rl-timelog/data/state.json`, plus a dated copy per day for 30 days). The saver notices when the laptop was off (a power cut, a shutdown or a suspend) by checking in every 20 seconds. When you come back, the time log and the coach each ask whether to leave that stretch out, so outages never count as work, as breaks, or against your course pace.
 - **Stays awake while you work:** while a section or break is running, the screen doesn't dim, lock or turn off and the laptop doesn't suspend. When nothing is running, idle works as usual.
 - **The desktop card** (Quickshell): with no windows open you see a serif clock and the bench: the section you're on (or the next one), time on it, time since your last break, chapter progress and today's total. A small month marks the days you worked on the build. Click it to open the time log.
-- **The bar** shows the running section and its time; it turns rose when a break is due and fills in when a break has run out. The **lock screen** shows the next section and today's work.
+- **The bar** shows the running section and its time; it turns rose when a break is due and fills in when a break has run out. The **lock screen** shows the next section and today's work. Its tooltip, and a line on the desktop card, also show where the course stands: chapters done, ahead or behind, and the finish estimate.
 - **Look:** warm cream paper, ink text, one rose accent (Rosé Pine Dawn). Fraunces serif for clocks and headings, IBM Plex for text and labels. Hyprland (Lua config), floating-island **waybar**, **rofi**, **mako**, **hyprlock**, **hypridle**, **kitty** + **starship**, **zathura** for books and papers. One palette across GTK, Qt/KDE, the terminal, fish, fzf and bat.
 - **Safety:** your old desktop configs are backed up (`./restore.sh` puts them back).
 
@@ -53,19 +53,19 @@ steps/chapter-1.txt
 
 **Starting over:** **Start over…** (under "Your data") downloads a backup, then clears every section and time and loads the book's Chapter 0. Settings and the repo URL are kept.
 
-**The course coach** (`http://localhost:8765/coach`, linked at the top of the time log): Raschka's reasoning-model videos, Lambert's RLHF book and *Evals for AI Engineers*, 37 chapters at 1.5 hours each. It never times you. It compares the chapters you've ticked (plus "% through" for the one you're in) with where the clock would have you by now: by default it runs continuously from the moment you start (55.5 hours for the whole course), or you can pick a number of hours a day, then shows:
+**The course coach** (the **Course coach** tab at the top of the time log window): Raschka's reasoning-model videos, Lambert's RLHF book and *Evals for AI Engineers*, 37 chapters at 1.5 hours each. It sits in the same window as a second view, so the time log keeps running underneath and its break alarm still sounds while you're looking at the coach. It never times you. It compares the chapters you've ticked, plus "% through" for the one you're in, with where the clock would have you by now: by default the clock runs continuously from the moment you start (55.5 hours for the whole course), or you can pick a number of hours a day. When you fall a whole chapter behind, a notification gives you the new finish estimate.
 
 - how far ahead or behind you are, in chapters and hours
 - exactly which chapters bring you back on pace by this time tomorrow
 - three finish dates with an approximate time: the original target, the date at your planned pace from here, and the date at your real pace so far
 - when each book will be finished, at both paces
 
-**Power cuts and disconnections:** every tick is written to disk at once. The coach page also checks in every 30 seconds while it's open. If it was off for more than 3 minutes (a power cut, the browser closing or the laptop asleep), it asks when it comes back:
+**Power cuts and disconnections:** every tick is written to disk at once. If the laptop was off, the coach asks when you come back:
 
-- **Leave it out** pauses the course clock for that stretch, so the outage doesn't put you behind.
+- **Leave it out** pauses the course clock for that stretch.
 - **Count it** is for when you kept studying on the other laptop.
 
-Outages that were left out show as shaded bands on the chart and are listed under Settings.
+Outages that were left out show as shaded bands on the chart and are listed under Settings. Switching between the two views or closing the window isn't counted as an outage; only the laptop being off is.
 
 **Re-plan from today** resets the pace to where you are and keeps the slip in a history. The pace and the hours per chapter are in its Settings.
 
