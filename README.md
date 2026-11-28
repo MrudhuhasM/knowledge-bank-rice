@@ -53,6 +53,22 @@ steps/chapter-1.txt
 
 **Starting over:** **Start over…** (under "Your data") downloads a backup, then clears every section and time and loads the book's Chapter 0. Settings and the repo URL are kept.
 
+**The course coach** (`http://localhost:8765/coach`, linked at the top of the time log): Raschka's reasoning-model videos, Lambert's RLHF book and *Evals for AI Engineers*, 37 chapters at 1.5 hours each. It never times you. It compares the chapters you've ticked (plus "% through" for the one you're in) with where the clock would have you by now: by default it runs continuously from the moment you start (55.5 hours for the whole course), or you can pick a number of hours a day, then shows:
+
+- how far ahead or behind you are, in chapters and hours
+- exactly which chapters bring you back on pace by this time tomorrow
+- three finish dates with an approximate time: the original target, the date at your planned pace from here, and the date at your real pace so far
+- when each book will be finished, at both paces
+
+**Power cuts and disconnections:** every tick is written to disk at once. The coach page also checks in every 30 seconds while it's open. If it was off for more than 3 minutes (a power cut, the browser closing or the laptop asleep), it asks when it comes back:
+
+- **Leave it out** pauses the course clock for that stretch, so the outage doesn't put you behind.
+- **Count it** is for when you kept studying on the other laptop.
+
+Outages that were left out show as shaded bands on the chart and are listed under Settings.
+
+**Re-plan from today** resets the pace to where you are and keeps the slip in a history. The pace and the hours per chapter are in its Settings.
+
 **Backups:** the saver keeps a copy per day for 30 days in `~/.local/share/rl-timelog/data/backups/`. **Download backup** in the page saves a JSON file you can keep elsewhere; **Restore from backup** loads one.
 
 **In a terminal:** `rl-status` prints the current section; `rl-status --json` prints the full summary; `systemctl --user status rl-timelog` checks the saver.

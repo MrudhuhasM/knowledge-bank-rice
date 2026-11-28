@@ -177,7 +177,7 @@ xdg-mime default org.pwmt.zathura.desktop application/pdf 2>/dev/null || true
 say "Installing the RL build time log (saver on http://localhost:8765)"
 RL="$HOME/.local/share/rl-timelog"
 mkdir -p "$RL/data"
-install -m644 "$HERE/rl-timelog/saver.py" "$HERE/rl-timelog/rl-time-log.html" \
+install -m644 "$HERE/rl-timelog/saver.py" "$HERE/rl-timelog/rl-time-log.html" "$HERE/rl-timelog/coach.html" \
               "$HERE/rl-timelog/user.js" "$HERE/rl-timelog/userChrome.css" "$RL/"
 install -Dm644 "$HERE/systemd/rl-timelog.service" "$CFG/systemd/user/rl-timelog.service"
 
