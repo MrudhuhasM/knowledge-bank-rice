@@ -6,6 +6,7 @@ Serves the time log page at http://localhost:8765 and keeps its data on disk.
   GET  /              the page
   GET  /coach         the course coach page (three books against a steady pace)
   GET/PUT /api/coach  the coach's data, stored and guarded like /api/state
+  PUT  /api/coach-beat "the coach page is still open" (lets it leave outages out)
   GET  /api/state     everything the page stores, plus the last heartbeat
   PUT  /api/state     save (refused with 409 if a newer save is already on disk)
   PUT  /api/beat      "the page is still open" (lets it notice power cuts)
@@ -40,6 +41,7 @@ DATA = os.path.expanduser(os.environ.get("RL_TIMELOG_DATA", os.path.join(HERE, "
 STATE = os.path.join(DATA, "state.json")
 BEAT = os.path.join(DATA, "heartbeat")
 COACH = os.path.join(DATA, "coach.json")
+COACH_BEAT = os.path.join(DATA, "coach-heartbeat")
 BACKUPS = os.path.join(DATA, "backups")
 PORT = int(os.environ.get("RL_TIMELOG_PORT", "8765"))
 KEEP_DAYS = 30
@@ -84,9 +86,9 @@ def read_state():
         return None
 
 
-def read_beat():
+def read_beat(path=BEAT):
     try:
-        with open(BEAT) as f:
+        with open(path) as f:
             return int(f.read().strip())
     except (OSError, ValueError):
         return None
@@ -336,7 +338,8 @@ class Handler(BaseHTTPRequestHandler):
                     coach = read_json(COACH)
                 except (OSError, ValueError):
                     coach = None
-            return self.reply(200, json.dumps({"state": coach}).encode())
+                beat = read_beat(COACH_BEAT)
+            return self.reply(200, json.dumps({"state": coach, "beat": beat}).encode())
         if path == "/api/state":
             with LOCK:
                 body = json.dumps({"state": read_state(), "beat": read_beat()})
@@ -377,6 +380,10 @@ class Handler(BaseHTTPRequestHandler):
                 if old and new.get("rev", 0) <= old.get("rev", 0):
                     return self.reply(409, json.dumps({"state": old}).encode())
                 atomic_write(COACH, json.dumps(new, ensure_ascii=False, indent=1).encode())
+            return self.reply(200)
+        if path == "/api/coach-beat":
+            with LOCK:
+                atomic_write(COACH_BEAT, str(int(time.time() * 1000)).encode())
             return self.reply(200)
         if path == "/api/beat":
             with LOCK:

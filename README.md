@@ -60,6 +60,13 @@ steps/chapter-1.txt
 - three finish dates with an approximate time: the original target, the date at your planned pace from here, and the date at your real pace so far
 - when each book will be finished, at both paces
 
+**Power cuts and disconnections:** every tick is written to disk at once. The coach page also checks in every 30 seconds while it's open. If it was off for more than 3 minutes (a power cut, the browser closing or the laptop asleep), it asks when it comes back:
+
+- **Leave it out** pauses the course clock for that stretch, so the outage doesn't put you behind.
+- **Count it** is for when you kept studying on the other laptop.
+
+Outages that were left out show as shaded bands on the chart and are listed under Settings.
+
 **Re-plan from today** resets the pace to where you are and keeps the slip in a history. The pace and the hours per chapter are in its Settings.
 
 **Backups:** the saver keeps a copy per day for 30 days in `~/.local/share/rl-timelog/data/backups/`. **Download backup** in the page saves a JSON file you can keep elsewhere; **Restore from backup** loads one.

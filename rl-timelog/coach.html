@@ -28,7 +28,7 @@ h3{font-size:21px;margin:0}
 .next ol{margin:8px 0 0;padding-left:1.3em}.next li{margin:2px 0}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .stat{padding:12px 16px 16px 0;border-bottom:1px solid var(--line)}
-.stat b{display:block;font-family:var(--serif);font-weight:400;font-size:clamp(26px,3.6vw,32px);line-height:1.2;white-space:nowrap}
+.stat b{display:block;font-family:var(--serif);font-weight:400;font-size:clamp(22px,2.4vw,27px);line-height:1.2;padding-right:8px}
 .stat span{color:var(--grey);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
 .stat small{display:block;color:var(--grey);font-size:13px;margin-top:2px}
 .fin{width:100%;border-collapse:collapse;margin:18px 0 4px}
@@ -56,13 +56,16 @@ input.num{width:5.2em}
 .btns{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;align-items:center}
 .note{color:var(--grey);font-size:14px;margin:6px 0}
 .set{line-height:2.5}
+.ovl{position:fixed;inset:0;background:rgba(87,82,121,.35);display:grid;place-items:center;padding:16px;z-index:9}
+.box{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:22px 24px;width:min(520px,100%);box-shadow:0 16px 40px rgba(87,82,121,.18)}
+.box h2{border:0;padding:0;font-size:24px}.box h2::before{display:none}
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--card);padding:10px 18px;border-radius:12px;font-size:14px;z-index:10}
 @media(max-width:600px){.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:2px 0;padding-inline-start:8em;text-align:start!important}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-8em;color:var(--grey)}.card{padding:18px 18px 18px 30px}.u{grid-template-columns:34px minmax(0,1fr)}.u .r{grid-column:2}}
 </style></head><body><div id="root"></div>
 <script>{
-const LS='rl-coach-v1',DAY=864e5,HR=36e5;
+const LS='rl-coach-v1',LSB='rl-coach-beat',DAY=864e5,HR=36e5;
 const U=(t)=>({title:t,done:null,frac:0});
-const SEED={rev:0,start:null,settings:{hoursPerUnit:1.5,hoursPerDay:24},replans:[],books:[
+const SEED={rev:0,start:null,settings:{hoursPerUnit:1.5,hoursPerDay:24},replans:[],pauses:[],books:[
  {id:'raschka',title:'Build a Reasoning Model (From Scratch)',author:'Sebastian Raschka',how:'video lectures, coding along',unit:'Video',units:[
   'Motivation and code setup','Loading a base model, text generation, and KV caching','Building a verifier for evaluation and reinforcement learning',
   'Inference-time scaling: sampling and self-consistency','Inference-time scaling: scoring and self-refinement','Reinforcement learning: implementing GRPO for RLVR',
@@ -75,7 +78,7 @@ const SEED={rev:0,start:null,settings:{hoursPerUnit:1.5,hoursPerDay:24},replans:
   'Introduction','LLMs and Evaluation Basics','Error Analysis','Collaborative Evaluation Practices','Implementing Automated Evaluators',
   'Evaluating Multi-Turn Conversations','Evaluating Retrieval-Augmented Generation','Evaluating Tool Use and Complex Agents',
   'Continuous Integration and Deployment for LLM Agents','Interfaces for Human Review','Data Analysis for Traces','Improving LLM Agents'].map(U)}]};
-let S=null,mode='browser';
+let S=null,mode='browser',off=null,lastBeat=null;
 const root=document.getElementById('root');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const now=()=>Date.now(),pad=n=>String(n).padStart(2,'0');
@@ -93,12 +96,15 @@ const all=()=>S.books.flatMap(b=>b.units.map((u,i)=>({b,u,i})));
 const N=()=>all().length;
 const h=()=>S.settings.hoursPerUnit,rate=()=>S.settings.hoursPerDay/S.settings.hoursPerUnit; // units per day
 const done=()=>all().reduce((a,x)=>a+(x.u.done?1:x.u.frac||0),0);
-const expected=t=>S.start?Math.max(0,Math.min(N(),(t-S.start)/DAY*rate())):0;
-const target=()=>S.start+N()/rate()*DAY;
+const pauses=()=>S.pauses||(S.pauses=[]);
+const paused=t=>pauses().reduce((a,p)=>a+Math.max(0,Math.min(p[1],t)-Math.max(p[0],S.start)),0);
+const eff=t=>S.start?Math.max(0,t-S.start-paused(t)):0; // clock time since start, outages left out
+const expected=t=>S.start?Math.max(0,Math.min(N(),eff(t)/DAY*rate())):0;
+const target=()=>S.start+N()/rate()*DAY+paused(Infinity);
 const label=x=>(x.b.unit==='Video'?'Raschka video ':x.b.id==='lambert'?'Lambert ch. ':'Evals ch. ')+(x.i+1);
 function coach(t){
   const n=N(),k=done(),e=expected(t),diff=k-e,left=n-k;
-  const el=(t-S.start)/DAY;
+  const el=eff(t)/DAY;
   const planFinish=t+left/rate()*DAY;
   const realRate=el>=0.125&&k>0?k/el:null; // after 3 hours
   const realFinish=realRate?t+left/realRate*DAY:null;
@@ -137,7 +143,7 @@ function render(){if(!S)return;const t=now(),st=S.settings,n=N(),T=n*h();
       :Math.abs(c.diff)<0.05?`You’re exactly where a steady pace would have you.`
       :c.diff<0?`That’s ${hrs(-c.diff*h())} of study to catch up on. At your planned pace you’d now finish on <b>${dlabel(c.planFinish)}</b>, ${days((c.planFinish-target())/DAY)} after the original target.`
       :`That’s ${hrs(c.diff*h())} in hand. Keep this up and you finish on <b>${dlabel(c.planFinish)}</b>, ${days((target()-c.planFinish)/DAY)} early.`;
-    const next=c.k>=n?'':`<div class="next"><div class="lab">To be on pace by this time tomorrow (${dlabel(t+DAY)}, ${hm(t)})</div>${c.need<0.05?`<div class="say" style="font-size:19px">Nothing owed: you’re ahead of tomorrow’s mark already.</div>`:`<div class="say" style="font-size:19px">Finish ${one(c.need)} chapters (${hrs(c.need*h())}):</div><ol>${c.upto.map(o=>`<li>${esc(label(o.x))} — ${esc(o.x.u.title)}${o.note?` <span class="note">(${o.note})</span>`:''}</li>`).join('')}</ol>`}</div>`;
+    const next=c.k>=n?'':`<div class="next"><div class="lab">To be on pace by this time tomorrow (${dlabel(t+DAY)}, ${hm(t)})</div>${c.need<0.05?`<div class="say" style="font-size:19px">Nothing owed: you’re ahead of tomorrow’s mark already.</div>`:`<div class="say" style="font-size:19px">Finish ${one(c.need)} chapters (${hrs(c.need*h())}):</div><ol>${c.upto.slice(0,6).map(o=>`<li>${esc(label(o.x))} — ${esc(o.x.u.title)}${o.note?` <span class="note">(${o.note})</span>`:''}</li>`).join('')}</ol>${c.upto.length>6?`<p class="note">…then ${c.upto.length-6} more, through ${esc(label(c.upto[c.upto.length-1].x))}.</p>`:''}`}</div>`;
     top=`<div class="card"><div class="verdict"><div class="big ${cls}">${verdict}</div><div><div class="lab">${one(c.k)} of ${n} chapters done · started ${dlabel(S.start)}, ${hm(S.start)}</div><div class="say">${say}</div></div></div>${next}</div>
     <div class="btns"><button class="small" data-a="replan">Re-plan from today…</button><span class="note">Moves the start so today counts as on pace; the slip is kept in the history below.</span></div>`;}
   let est='';
@@ -158,7 +164,7 @@ function render(){if(!S)return;const t=now(),st=S.settings,n=N(),T=n*h();
   root.innerHTML=`<div class="band">${nav}${head}${top}</div>${est}
   <div class="band"><h2>The three books</h2><p class="note">Tick a chapter when it’s done; for the one you’re in, “% through” keeps the estimate honest. Ticking out of order is fine.</p>${books}</div>
   <div class="band"><h2>Settings</h2><p class="set">Each chapter or video counts as <input class="num" id="s-u" type="number" min="0.25" max="10" step="0.25" value="${st.hoursPerUnit}" aria-label="Hours per chapter"> hours. Pace: <select id="s-d" aria-label="Pace"><option value="24"${st.hoursPerDay>=24?' selected':''}>continuous clock (24 h a day)</option>${[12,10,8,6,4.5,3].map(v=>`<option value="${v}"${st.hoursPerDay==v?' selected':''}>${v} hours a day</option>`).join('')}</select> (the whole course in ${days(n/rate())}).</p>${hist}
-  <p class="note">${mode==='disk'?'Saved to disk with the time log (~/.local/share/rl-timelog/data/coach.json).':'Saved in this browser only; open it at http://localhost:8765/coach to save to disk.'}</p>${S.start?'<div class="btns"><button class="small" data-a="reset">Start the course over…</button></div>':''}</div>`;
+  <p class="note">${mode==='disk'?'Saved to disk with the time log (~/.local/share/rl-timelog/data/coach.json).':'Saved in this browser only; open it at http://localhost:8765/coach to save to disk.'}</p>${S.start?'<div class="btns"><button class="small" data-a="reset">Start the course over…</button></div>':''}${pauses().length?`<p class="note">Outages left out: ${pauses().map(p=>`${dlabel(p[0])} ${hm(p[0])}–${hm(p[1])}`).join(' · ')}.</p>`:''}</div>${off?offHTML():''}`;
   watch();
 }
 function draw(){const s=document.getElementById('chart');if(!s||!S.start)return;const W=s.clientWidth,Ht=s.clientHeight;if(!W)return;
@@ -169,20 +175,29 @@ function draw(){const s=document.getElementById('chart');if(!s||!S.start)return;
   let pts=`${x(t0)},${y(0)}`,cnt=0;for(const d of doneTimes){pts+=` ${x(d)},${y(cnt)} ${x(d)},${y(++cnt)}`;}pts+=` ${x(t)},${y(cnt)} ${x(t)},${y(c.k)}`;
   s.innerHTML=`${[0,Math.round(n/2),n].map(v=>`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="#f2e9e1"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="#6e6a86" font-family="IBM Plex Mono,monospace">${v}</text>`).join('')}
   ${W>520?ticks.map(d=>`<text x="${x(d)}" y="${Ht-8}" text-anchor="middle" font-size="11" fill="#6e6a86" font-family="IBM Plex Mono,monospace">${new Date(d).getDate()}/${new Date(d).getMonth()+1}</text>`).join(''):''}
-  <line x1="${x(t0)}" y1="${y(0)}" x2="${x(target())}" y2="${y(n)}" stroke="#6e6a86" stroke-width="1.5"/>
+  <polyline points="${[t0,...pauses().flatMap(p=>[p[0],p[1]]),target()].filter(v=>v>=t0&&v<=target()).sort((a,b)=>a-b).map(v=>x(v)+','+y(expected(v))).join(' ')}" fill="none" stroke="#6e6a86" stroke-width="1.5"/>
+  ${pauses().map(p=>`<rect x="${x(p[0])}" y="${Tp}" width="${Math.max(1,x(p[1])-x(p[0]))}" height="${Ht-Tp-B}" fill="#f2e9e1" opacity=".7"/>`).join('')}
   ${c.realFinish&&c.k<n?`<line x1="${x(t)}" y1="${y(c.k)}" x2="${x(c.realFinish)}" y2="${y(n)}" stroke="#d7827e" stroke-width="2" stroke-dasharray="6 5"/>`:''}
   <polyline points="${pts}" fill="none" stroke="#575279" stroke-width="3" stroke-linejoin="round"/>
   <circle cx="${x(t)}" cy="${y(c.k)}" r="5" fill="#d7827e"/><line x1="${x(t)}" x2="${x(t)}" y1="${Tp}" y2="${Ht-B}" stroke="#dfdad9" stroke-dasharray="2 4"/>`;}
 let ro=null;function watch(){const s=document.getElementById('chart');if(!s)return;if(ro)ro.disconnect();ro=new ResizeObserver(draw);ro.observe(s);}
 
+/* ---------- outages: the page beats every 30 s; a gap of over 3 minutes is asked about ---------- */
+function beat(){if(!S||!S.start||off)return;lastBeat=now();
+  if(mode==='disk')fetch('/api/coach-beat',{method:'PUT'}).catch(()=>{});else try{localStorage.setItem(LSB,String(lastBeat));}catch(e){}}
+setInterval(beat,30000);
+function offHTML(){const len=now()-off;return `<div class="ovl"><div class="box" role="dialog" aria-modal="true" aria-label="The coach was off"><h2>The coach was off for ${hrs(len/HR)}</h2><p>Last seen ${dlabel(off)}, ${hm(off)} — a power cut, the browser closing, or the laptop asleep.</p><div class="btns"><button class="pri" data-a="offout">Leave it out</button><button data-a="offin">Count it</button></div><p class="note">“Leave it out” pauses the course clock from ${hm(off)} until you click, so the outage doesn’t put you behind. “Count it” if you kept studying anyway.</p></div></div>`;}
+
 /* ---------- actions ---------- */
 const find=(b,i)=>S.books.find(x=>x.id===b).units[+i];
 const A={
-  start(){S.start=now();save();toast('Course started: the pace runs from now');},
+  offout(){pauses().push([off,now()]);off=null;save();beat();toast('Outage left out: the clock paused for it');},
+  offin(){off=null;render();beat();},
+  start(){S.start=now();save();setTimeout(beat,100);toast('Course started: the pace runs from now');},
   tick(el){const u=find(el.dataset.b,el.dataset.i);u.done=now();u.frac=0;save();},
   undo(el){const u=find(el.dataset.b,el.dataset.i);u.done=null;save();},
   replan(){const c=coach(now());if(!confirm('Re-plan from today? The pace restarts so that where you are now counts as on pace. The original target is replaced and the change is kept in the history.'))return;
-    const from=target();S.start=now()-c.k/rate()*DAY;S.replans.push({at:now(),from,to:target()});save();toast('New target: '+dlabel(target()));},
+    const from=target();S.start=now()-c.k/rate()*DAY;S.pauses=[];S.replans.push({at:now(),from,to:target()});save();toast('New target: '+dlabel(target()));},
   reset(){if(!confirm('Start the course over? Every tick and the start date are cleared.'))return;const keep=S.settings,r=S.rev;S=JSON.parse(JSON.stringify(SEED));S.settings=keep;S.rev=r;save();}
 };
 root.addEventListener('click',e=>{const el=e.target.closest('[data-a]');if(el&&A[el.dataset.a]){e.preventDefault();A[el.dataset.a](el);}});
@@ -190,12 +205,14 @@ root.addEventListener('change',e=>{const el=e.target;
   if(el.tagName==='SELECT'&&el.dataset.b){find(el.dataset.b,el.dataset.i).frac=+el.value;save();}
   if(el.id==='s-u'||el.id==='s-d'){const v=+el.value;if(!(v>0))return;
     // keep today's standing when the pace changes: re-anchor so progress-vs-expected is unchanged
-    const t=now(),before=S.start?expected(t):0;S.settings[el.id==='s-u'?'hoursPerUnit':'hoursPerDay']=v;if(S.start)S.start=t-before/rate()*DAY;save();}});
-setInterval(()=>{if(!document.querySelector('select:focus,input:focus'))render();},60000);
+    const t=now(),before=S.start?expected(t):0;S.settings[el.id==='s-u'?'hoursPerUnit':'hoursPerDay']=v;if(S.start){S.start=t-before/rate()*DAY;S.pauses=[];}save();}});
+setInterval(()=>{if(!off&&!document.querySelector('select:focus,input:focus'))render();},60000);
 (async()=>{
-  if(/^https?:$/.test(location.protocol)){try{const r=await fetch('/api/coach',{cache:'no-store'});if(r.ok){const j=await r.json();mode='disk';S=j.state||null;}}catch(e){}}
-  if(!S){try{S=JSON.parse(localStorage.getItem(LS)||'null');}catch(e){}}
+  if(/^https?:$/.test(location.protocol)){try{const r=await fetch('/api/coach',{cache:'no-store'});if(r.ok){const j=await r.json();mode='disk';S=j.state||null;lastBeat=j.beat||null;}}catch(e){}}
+  if(!S){try{S=JSON.parse(localStorage.getItem(LS)||'null');lastBeat=+localStorage.getItem(LSB)||null;}catch(e){}}
   if(!S)S=JSON.parse(JSON.stringify(SEED));
-  render();
+  pauses();
+  if(S.start&&lastBeat&&lastBeat>=S.start&&now()-lastBeat>3*60000&&done()<N())off=lastBeat;
+  render();beat();
 })();
 }</script></body></html>
